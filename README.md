@@ -10,6 +10,27 @@
 | `aiaaaa4.video-translate` | AI落地第四声：人工级视频字幕翻译 skill | `skills/video-translate` | skill | `1.3.1` |
 | `aiaaaa4.cloud-file-mgmt` | AI落地第四声：网盘文件管理 skill | `skills/cloud-file-mgmt` | skill | `1.0.0` |
 
+## Install
+
+ClawHub:
+
+```bash
+clawhub install @aiaaaa4/video-download
+clawhub install @aiaaaa4/video-translate
+clawhub install @aiaaaa4/cloud-file-mgmt
+```
+
+skills.sh / `npx skills` direct GitHub install:
+
+```bash
+npx skills add aiaaaa4/ai-landing-skills --list --full-depth
+npx skills add aiaaaa4/ai-landing-skills --skill video-download --full-depth
+npx skills add aiaaaa4/ai-landing-skills --skill video-translate --full-depth
+npx skills add aiaaaa4/ai-landing-skills --skill cloud-file-mgmt --full-depth
+```
+
+The `rithmic-signup` app is private and is not part of this public repository.
+
 ## Repository Rules
 
 - `registry.json` is the source for public IDs, names, paths, versions, and platform targets.
