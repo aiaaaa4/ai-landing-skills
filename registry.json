@@ -30,15 +30,6 @@
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"]
     },
     {
-      "kind": "app",
-      "slug": "rithmic-signup",
-      "skill_id": "aiaaaa4.rithmic-signup",
-      "display_name": "AI落地第四声：Rithmic 注册助手 app",
-      "path": "apps/rithmic-signup",
-      "version": "0.1.0",
-      "platforms": ["github"]
-    },
-    {
       "kind": "skill",
       "slug": "cloud-file-mgmt",
       "skill_id": "aiaaaa4.cloud-file-mgmt",
