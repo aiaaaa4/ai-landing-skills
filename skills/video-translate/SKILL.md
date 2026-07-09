@@ -34,7 +34,7 @@ and English workflow rules for execution.
 
 ## Version
 
-Current version: `v1.3.1` (`2026-07-09`). This release fixes Qwen-MT helper stability: production runs use serial qwen-mt-plus calls (`--concurrency 1`), qwen-mt uses the workspace-specific Alibaba endpoint from `.env`, sends no `system` role, and does not fallback to qwen-plus on rate limits. It keeps the v1.3.0 simplified stack: ASR is fixed to Alibaba Fun-ASR, segment translation/generation is fixed to Alibaba `qwen-mt-plus`, and the orchestrating AI handles tool execution, timestamp alignment, QA repair, export, and the final chat summary. Normal runs no longer pause for the orchestrator to hand-write `segments.txt`, and no `.run_summary.md` deliverable is written.
+Current version: `v1.3.2` (`2026-07-10`). This release keeps the v1.3.1 production workflow and updates public display metadata so platform listings use the concise functional name `人工级视频字幕翻译`. The v1.3.1 workflow fixed Qwen-MT helper stability: production runs use serial qwen-mt-plus calls (`--concurrency 1`), qwen-mt uses the workspace-specific Alibaba endpoint from `.env`, sends no `system` role, and does not fallback to qwen-plus on rate limits. It keeps the v1.3.0 simplified stack: ASR is fixed to Alibaba Fun-ASR, segment translation/generation is fixed to Alibaba `qwen-mt-plus`, and the orchestrating AI handles tool execution, timestamp alignment, QA repair, export, and the final chat summary. Normal runs no longer pause for the orchestrator to hand-write `segments.txt`, and no `.run_summary.md` deliverable is written.
 
 ## Operating Contract
 

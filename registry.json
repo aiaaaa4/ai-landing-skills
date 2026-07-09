@@ -15,9 +15,9 @@
       "kind": "skill",
       "slug": "video-download",
       "skill_id": "aiaaaa4.video-download",
-      "display_name": "AI落地第四声：一键加速视频下载 skill",
+      "display_name": "一键加速视频下载",
       "path": "skills/video-download",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": "@aiaaaa4/video-download"
     },
@@ -25,9 +25,9 @@
       "kind": "skill",
       "slug": "video-translate",
       "skill_id": "aiaaaa4.video-translate",
-      "display_name": "AI落地第四声：人工级视频字幕翻译 skill",
+      "display_name": "人工级视频字幕翻译",
       "path": "skills/video-translate",
-      "version": "1.3.1",
+      "version": "1.3.2",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": "@aiaaaa4/video-translate"
     },
@@ -35,9 +35,9 @@
       "kind": "skill",
       "slug": "cloud-file-mgmt",
       "skill_id": "aiaaaa4.cloud-file-mgmt",
-      "display_name": "AI落地第四声：网盘文件管理 skill",
+      "display_name": "网盘文件管理",
       "path": "skills/cloud-file-mgmt",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": "@aiaaaa4/cloud-file-mgmt"
     }

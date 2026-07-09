@@ -1,4 +1,4 @@
 interface:
-  display_name: "AI落地第四声：一键加速视频下载 skill"
+  display_name: "一键加速视频下载"
   short_description: "先列出可用格式并确认画质、保存位置和文件名，再用 yt-dlp 下载视频或音频。"
   default_prompt: "使用 $video-download 检查这个视频链接的可用格式，先确认画质、下载路径和文件名，再开始下载。"

@@ -1,4 +1,4 @@
 interface:
-  display_name: "AI落地第四声：网盘文件管理 skill"
+  display_name: "网盘文件管理"
   short_description: "通过本地 AList WebDAV 与 aria2 脚本管理百度网盘、夸克网盘的上传、删除、挂载和服务状态。"
   default_prompt: "使用 $cloud-file-mgmt 管理本地网盘文件服务。先确认目标网盘、路径和是否涉及删除，再运行对应脚本。"

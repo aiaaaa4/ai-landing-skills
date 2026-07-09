@@ -6,9 +6,9 @@
 
 | ID | Display name | Path | Type | Version |
 | --- | --- | --- | --- | --- |
-| `aiaaaa4.video-download` | AI落地第四声：一键加速视频下载 skill | `skills/video-download` | skill | `1.0.1` |
-| `aiaaaa4.video-translate` | AI落地第四声：人工级视频字幕翻译 skill | `skills/video-translate` | skill | `1.3.1` |
-| `aiaaaa4.cloud-file-mgmt` | AI落地第四声：网盘文件管理 skill | `skills/cloud-file-mgmt` | skill | `1.0.0` |
+| `aiaaaa4.video-download` | 一键加速视频下载 | `skills/video-download` | skill | `1.1.0` |
+| `aiaaaa4.video-translate` | 人工级视频字幕翻译 | `skills/video-translate` | skill | `1.3.2` |
+| `aiaaaa4.cloud-file-mgmt` | 网盘文件管理 | `skills/cloud-file-mgmt` | skill | `1.1.0` |
 
 ## Install
 
