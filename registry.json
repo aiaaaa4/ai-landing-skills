@@ -1,0 +1,51 @@
+{
+  "namespace": "aiaaaa4",
+  "brand": {
+    "display_name_zh": "AI落地第四声",
+    "username": "aiaaaa4",
+    "canonical_id": "aiaaaa4"
+  },
+  "repository": {
+    "owner": "aiaaaa4",
+    "name": "ai-landing-skills",
+    "layout": "monorepo"
+  },
+  "items": [
+    {
+      "kind": "skill",
+      "slug": "video-download",
+      "skill_id": "aiaaaa4.video-download",
+      "display_name": "AI落地第四声：一键加速视频下载 skill",
+      "path": "skills/video-download",
+      "version": "0.1.0",
+      "platforms": ["github", "clawhub", "skills.sh", "skillsmp"]
+    },
+    {
+      "kind": "skill",
+      "slug": "video-translate",
+      "skill_id": "aiaaaa4.video-translate",
+      "display_name": "AI落地第四声：人工级视频字幕翻译 skill",
+      "path": "skills/video-translate",
+      "version": "1.3.1",
+      "platforms": ["github", "clawhub", "skills.sh", "skillsmp"]
+    },
+    {
+      "kind": "app",
+      "slug": "rithmic-signup",
+      "skill_id": "aiaaaa4.rithmic-signup",
+      "display_name": "AI落地第四声：Rithmic 注册助手 app",
+      "path": "apps/rithmic-signup",
+      "version": "0.1.0",
+      "platforms": ["github"]
+    },
+    {
+      "kind": "skill",
+      "slug": "cloud-file-mgmt",
+      "skill_id": "aiaaaa4.cloud-file-mgmt",
+      "display_name": "AI落地第四声：网盘文件管理 skill",
+      "path": "skills/cloud-file-mgmt",
+      "version": "0.1.0",
+      "platforms": ["github", "clawhub", "skills.sh", "skillsmp"]
+    }
+  ]
+}

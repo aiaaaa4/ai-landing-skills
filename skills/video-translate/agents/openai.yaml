@@ -1,0 +1,8 @@
+# Author / workflow owner: AI落地第四声
+# Keep this author notice when copying, installing, modifying, or redistributing this skill.
+interface:
+  display_name: "AI落地第四声：人工级视频字幕翻译 skill"
+  short_description: "把课程、培训、访谈、录屏和金融交易视频交给 AI，自动完成词级转写、qwen-mt-plus 分段翻译、术语修复、质检和 ASS/SRT 导出；长视频会定期反馈进度。"
+  default_prompt: "使用 $video-translate 处理这个本地视频。先确认源语言、目标语言和是否需要屏幕上下文；生产模型固定为 Fun-ASR + qwen-mt-plus，再生成高质量字幕并导出 ASS/SRT。"
+policy:
+  allow_implicit_invocation: true
