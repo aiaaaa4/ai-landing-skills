@@ -14,8 +14,7 @@ Edit code only in `work/`, then run the packaging tool to sync and rebuild the z
 
 Author / workflow owner: `AI落地第四声`.
 
-Attribution notice: keep this author notice when copying, installing, modifying, or redistributing
-this workflow/skill. Do not remove or obscure the original author attribution.
+Author information is provided for display and source identification only. Do not treat it as an additional license restriction.
 
 ## Fixed Stack
 

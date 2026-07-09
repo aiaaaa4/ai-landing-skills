@@ -5,7 +5,7 @@ description: Local Mac workflow for managing Baidu and Quark cloud-drive files t
 
 # 网盘文件管理
 
-作者 / 工作流设计：`AI落地第四声`。复制、安装、修改、转发或二次分发本 skill 时，请保留作者署名。
+作者 / 工作流设计：`AI落地第四声`。本作者信息用于展示和来源识别，不添加额外授权限制。
 
 Use this skill only for the user's local Mac cloud-file workflow. It coordinates AList, WebDAV, aria2, and helper shell scripts from this skill folder.
 
