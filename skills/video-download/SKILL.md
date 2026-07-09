@@ -37,7 +37,7 @@ Mention format IDs or selectors, resolution, FPS, HDR/SDR, video codec, audio co
 4. Ask the user which quality or format to download. Do not run the download command until they confirm.
 
 5. Confirm the download path.
-   - On the first run in a thread or project, propose `/Users/aarondong/Desktop/video-download skill/outputs` as the default path and ask the user to confirm it.
+   - On the first run in a thread or project, propose a project-local `outputs/` directory under the current working folder as the default path and ask the user to confirm it.
    - On later runs, ask whether to save to the existing default path.
    - If the user wants a different path, ask them to send the new path directly.
    - Use the confirmed path as `OUTPUT_DIR`.

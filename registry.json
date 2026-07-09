@@ -17,7 +17,7 @@
       "skill_id": "aiaaaa4.video-download",
       "display_name": "AI落地第四声：一键加速视频下载 skill",
       "path": "skills/video-download",
-      "version": "0.1.0",
+      "version": "1.0.1",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"]
     },
     {
@@ -35,7 +35,7 @@
       "skill_id": "aiaaaa4.cloud-file-mgmt",
       "display_name": "AI落地第四声：网盘文件管理 skill",
       "path": "skills/cloud-file-mgmt",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"]
     }
   ]
