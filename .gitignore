@@ -5,6 +5,7 @@
 
 outputs/
 runtime/
+local-projects/
 work/
 tmp/
 *.zip

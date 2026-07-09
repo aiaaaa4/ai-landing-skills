@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DISALLOWED_PARTS = {".env", "outputs", "runtime", ".DS_Store", "__pycache__", ".pytest_cache"}
 DISALLOWED_SUFFIXES = {".mp4", ".mov", ".mkv", ".zip", ".log", ".pyc"}
+LOCAL_ONLY_DIRS = {".git", "local-projects"}
 
 
 def fail(message: str) -> None:
@@ -92,7 +93,7 @@ def validate_skills(items: list[dict]) -> None:
 def validate_public_tree() -> None:
     for path in ROOT.rglob("*"):
         rel = path.relative_to(ROOT)
-        if ".git" in rel.parts:
+        if any(part in LOCAL_ONLY_DIRS for part in rel.parts):
             continue
         if any(part in DISALLOWED_PARTS for part in rel.parts):
             fail(f"disallowed local/generated path in repo: {rel}")

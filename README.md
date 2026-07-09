@@ -15,7 +15,7 @@
 
 - `registry.json` is the source for public IDs, names, paths, versions, and platform targets.
 - Installable skill folders stay lean: `SKILL.md` plus required `agents/`, `scripts/`, `references/`, or assets.
-- Generated outputs, private `.env` files, local runtime data, logs, downloaded media, subtitle outputs, and zip packages stay out of Git.
+- Generated outputs, private `.env` files, local runtime data, logs, downloaded media, subtitle outputs, zip packages, and `local-projects/` stay out of Git.
 - Publish one skill at a time. Combined workflows are intentionally deferred.
 - Public release to GitHub, ClawHub, skills.sh, or any other platform requires explicit confirmation.
 
