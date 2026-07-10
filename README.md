@@ -4,6 +4,7 @@
   <p align="center">
     <a href="#skills">浏览 Skills</a> ·
     <a href="#install">安装</a> ·
+    <a href="docs/PROJECT_CONTEXT.md">项目策略</a> ·
     <a href="docs/RELEASING.md">发布流程</a> ·
     <a href="https://github.com/aiaaaa4/ai-landing-skills/issues">反馈问题</a>
   </p>
@@ -101,6 +102,7 @@ ClawHub 独立版本更新 / skills.sh 直接读取 GitHub 最新源码
 - `registry.json` 是公开 ID、展示名称、目录、版本和平台目标的唯一来源。
 - 每个 installable Skill 只包含执行需要的 `SKILL.md`、脚本、引用资料和资源；较长的用户文档放在 `docs/`。
 - 发布时始终一次选择一个 Skill，并先运行 GitHub Actions 的 dry run。完整步骤见 [发布说明](docs/RELEASING.md)。
+- 长期项目边界、版本规则和本地运行策略见 [项目总控上下文](docs/PROJECT_CONTEXT.md)。
 - `rithmic-signup` 是私有 App，位于独立私有仓库，不会出现在这个公开目录或公共 Skill 平台。
 
 ## Repository Layout

@@ -33,4 +33,4 @@ GitHub is the source of truth. Each public skill is authored in `skills/<slug>/`
 
 ## Local Boundary
 
-Use `~/Developer/aiaaaa4/ai-landing-skills` for the public monorepo and `~/Developer/aiaaaa4/rithmic-signup` for the private app repository. The ignored `local-projects/` folder is not a source of truth.
+Use `~/Developer/aiaaaa4/ai-landing-skills` for the public monorepo and `~/Developer/aiaaaa4/rithmic-signup` for the private app repository. The ignored `local-projects/` folder is never a public release source, but may hold an active local runtime; keep its database, credentials, logs, and outputs out of Git.
