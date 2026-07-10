@@ -1,0 +1,19 @@
+name: Publish ClawHub skills
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview publishing without creating releases
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  publish:
+    uses: openclaw/clawhub/.github/workflows/skill-publish.yml@main
+    with:
+      owner: aiaaaa4
+      dry_run: ${{ inputs.dry_run }}
+    secrets:
+      clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
