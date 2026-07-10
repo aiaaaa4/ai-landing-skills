@@ -99,7 +99,7 @@ class PipelineScriptsTest(unittest.TestCase):
             "[SEG 0001]\n"
             "SRC_RAW: welcome to trade pro academy on trading view\n"
             "SRC_DISPLAY: Welcome to Trade Pro Academy on Trading View.\n"
-            "ZH: 欢迎来到 Trade Pro Academy，这里有黄牛的业绩。\n"
+            "ZH: 欢迎来到 Trade Pro Academy，这里有黄牛、剥头皮交易员党和越狱的业绩。\n"
             "[/SEG]\n",
             encoding="utf-8",
         )
@@ -108,6 +108,9 @@ class PipelineScriptsTest(unittest.TestCase):
         repaired = segments.read_text(encoding="utf-8")
         self.assertIn("TradePro Academy on TradingView", repaired)
         self.assertIn("剥头皮交易员", repaired)
+        self.assertNotIn("剥头皮交易员党", repaired)
+        self.assertIn("突破", repaired)
+        self.assertNotIn("越狱", repaired)
         self.assertIn("交易表现", repaired)
         # SRC_RAW must stay untouched.
         self.assertIn("SRC_RAW: welcome to trade pro academy on trading view", repaired)

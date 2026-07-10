@@ -233,6 +233,16 @@
       "note": "Trading translation"
     },
     {
+      "pattern": "剥头皮交易员党",
+      "replacement": "剥头皮交易员",
+      "note": "Repair qwen-mt hallucinated suffix in scalper translations"
+    },
+    {
+      "pattern": "越狱",
+      "replacement": "突破",
+      "note": "In this trading-only workflow, break out means price breakout rather than jailbreak"
+    },
+    {
       "pattern": "公允价值缺口",
       "replacement": "公平价值缺口",
       "note": "Trading-community wording"

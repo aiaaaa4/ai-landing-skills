@@ -79,7 +79,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--heartbeat-seconds", type=int, default=60, help="Print progress at least this often while translating batches.")
     parser.add_argument("--screen-context", type=Path, default=None, help="Optional screen context file.")
     parser.add_argument("--max-display-tokens", type=int, default=18)
-    parser.add_argument("--max-retries", type=int, default=3)
+    parser.add_argument("--max-retries", type=int, default=8, help="Retries per translation request, including rate-limit backoff.")
+    parser.add_argument(
+        "--qwen-mt-min-interval-seconds",
+        type=float,
+        default=1.0,
+        help="Minimum interval between qwen-mt requests. Keep production runs at 1 second or higher.",
+    )
     return parser.parse_args()
 
 
@@ -228,6 +234,18 @@ def qwen_mt_source_lang(source_language_name: str) -> str:
     return QWEN_MT_SOURCE_LANG_MAP.get(key, "auto")
 
 
+def retry_delay_seconds(exc: Exception, attempt: int) -> float:
+    """Respect a gateway-provided retry window and otherwise back off conservatively."""
+    if isinstance(exc, urllib.error.HTTPError):
+        retry_after = exc.headers.get("Retry-After") if exc.headers else None
+        if retry_after:
+            try:
+                return max(1.0, float(retry_after))
+            except ValueError:
+                pass
+    return min(120.0, 10.0 * (2 ** (attempt - 1)))
+
+
 def dashscope_translate(
     api_key: str,
     model: str,
@@ -284,7 +302,9 @@ def dashscope_translate(
         except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
             last_error = exc
             if attempt < max_retries:
-                time.sleep(2 * attempt)
+                wait = retry_delay_seconds(exc, attempt)
+                print(f"DashScope request failed ({exc}); retrying in {wait:.0f}s ({attempt}/{max_retries})...", flush=True)
+                time.sleep(wait)
     raise RuntimeError(f"DashScope translation failed after {max_retries} attempts: {last_error}")
 
 
@@ -325,7 +345,9 @@ def dashscope_translate_qwen_mt(
         except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
             last_error = exc
             if attempt < max_retries:
-                time.sleep(2 * attempt)
+                wait = retry_delay_seconds(exc, attempt)
+                print(f"Qwen-MT request failed ({exc}); retrying in {wait:.0f}s ({attempt}/{max_retries})...", flush=True)
+                time.sleep(wait)
     raise RuntimeError(f"Qwen-MT translation failed after {max_retries} attempts: {last_error}")
 
 
@@ -370,6 +392,7 @@ def translate_pending(
     domain_name: str,
     screen_context: str,
     heartbeat_seconds: int,
+    qwen_mt_min_interval_seconds: float,
 ) -> dict[str, str]:
     batches = chunk_batches(pending, batch_size)
     total = len(batches)
@@ -386,11 +409,18 @@ def translate_pending(
     completed = 0
     started_at = time.monotonic()
     last_heartbeat = started_at
+    last_qwen_mt_request_at: float | None = None
 
     def run_model(used_model: str, batch: list[SegmentChunk]) -> dict[str, str]:
+        nonlocal last_qwen_mt_request_at
         if is_qwen_mt_model(used_model):
             result: dict[str, str] = {}
             for item in batch:
+                if last_qwen_mt_request_at is not None:
+                    remaining = qwen_mt_min_interval_seconds - (time.monotonic() - last_qwen_mt_request_at)
+                    if remaining > 0:
+                        time.sleep(remaining)
+                last_qwen_mt_request_at = time.monotonic()
                 result.update(
                     dashscope_translate_qwen_mt(
                         api_key,
@@ -547,6 +577,7 @@ def main() -> int:
         domain_name=args.domain_name,
         screen_context=screen_context,
         heartbeat_seconds=args.heartbeat_seconds,
+        qwen_mt_min_interval_seconds=max(0.0, args.qwen_mt_min_interval_seconds),
     )
 
     write_segments(args.out, chunks, translations)

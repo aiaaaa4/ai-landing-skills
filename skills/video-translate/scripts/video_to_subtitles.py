@@ -283,6 +283,10 @@ def ensure_ai_segments(work_dir: Path, transcript_dir: Path, language: str, doma
         domain_name,
         "--concurrency",
         "1",
+        "--max-retries",
+        "8",
+        "--qwen-mt-min-interval-seconds",
+        "1.0",
     ]
     if screen_context.exists() and screen_context.stat().st_size > 0:
         cmd.extend(["--screen-context", str(screen_context)])
