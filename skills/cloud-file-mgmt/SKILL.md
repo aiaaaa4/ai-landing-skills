@@ -1,17 +1,19 @@
 ---
 name: cloud-file-mgmt
-description: 网盘文件管理工作流，用于在 Mac 本地通过 AList WebDAV 和 aria2 辅助脚本管理百度网盘、夸克网盘文件，支持启动/停止服务、检查状态、上传文件或文件夹、删除远程文件、挂载/卸载 Finder WebDAV。Use when Codex needs to manage local cloud file services, upload or delete Baidu/Quark cloud-drive files through AList WebDAV, check service status, or mount/unmount the drive in Finder.
+description: 在 Mac 本地通过 AList WebDAV 管理百度网盘与夸克网盘，并用 Agent 执行服务启动、状态检查、Finder 挂载、文件或文件夹上传及确认后删除。Use when Codex needs to manage the user's local Baidu/Quark cloud-drive workflow, operate AList or aria2 services, upload local files, remove a confirmed remote file, or mount/unmount WebDAV in Finder.
 ---
 
 # 网盘文件管理
 
 作者 / 工作流设计：`AI落地第四声`。本作者信息用于展示和来源识别，不添加额外授权限制。
 
-这是一套面向 Mac 本地网盘管理的工作流。用户不需要记住 AList、WebDAV、aria2、curl 和 Finder 挂载命令，只需要告诉 AI 想上传、删除、启动服务、查看状态或挂载网盘。AI 会先确认目标网盘、路径和是否涉及删除，再调用 skill 自带脚本完成操作。
+这是一套面向 Mac 本地多网盘管理的工作流。用户不需要记住 AList、WebDAV、aria2、curl 和 Finder 挂载命令，只需要告诉 AI 想上传、删除、启动服务、查看状态或挂载网盘。AI 会先确认目标网盘、路径和是否涉及删除，再调用 Skill 自带脚本完成操作。
 
-核心价值：把本地 AList WebDAV 服务、aria2 下载服务、百度网盘/夸克网盘上传删除、Finder 挂载管理放进同一个可复用流程。它重点解决手动命令分散、路径容易写错、删除操作风险高、服务状态不透明、上传文件夹前需要打包等问题。
+核心价值：把本地 AList WebDAV 服务、aria2 服务、百度网盘/夸克网盘上传删除和 Finder 挂载管理放进同一个可复用流程。它重点解决手动命令分散、路径容易写错、删除操作风险高、服务状态不透明、上传文件夹前需要打包等问题。
 
-快速开始：在 skill 目录运行 `scripts/init-runtime.sh` 初始化本地 `runtime/`，放入或指定 AList 可执行文件，然后让 AI 执行“启动网盘服务”“上传这个文件到百度网盘”“删除夸克网盘里的某个文件”“在 Finder 挂载 AList WebDAV”等任务。密码、token、数据库、日志和下载文件都保留在本地，不进入 GitHub。
+快速开始：在 Skill 目录运行 `scripts/init-runtime.sh` 初始化本地 `runtime/`，放入或指定 AList 可执行文件，然后让 AI 执行“启动网盘服务”“上传这个文件到百度网盘”“删除夸克网盘里的某个文件”“在 Finder 挂载 AList WebDAV”等任务。密码、Token、数据库、日志和下载文件都保留在本地，不进入 GitHub。
+
+关于速度：Skill 会管理本地 aria2 运行环境，为后续的直链传输准备基础，但当前脚本不绕过百度网盘或其他平台的会员、版权、风控和带宽限制。任何传输速度都取决于直链、账号权限和平台规则。
 
 效果示例：
 

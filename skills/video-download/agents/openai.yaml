@@ -1,4 +1,4 @@
 interface:
   display_name: "一键加速视频下载"
-  short_description: "先列出可用格式并确认画质、保存位置和文件名，再用 yt-dlp 下载视频或音频。"
-  default_prompt: "使用 $video-download 检查这个视频链接的可用格式，先确认画质、下载路径和文件名，再开始下载。"
+  short_description: "用 yt-dlp 与 FFmpeg 下载多站点视频或音频；先比较画质、格式和保存位置，再确认执行。"
+  default_prompt: "使用 $video-download 检查这个视频链接可选的画质和格式；我确认画质、下载路径和文件名后再开始下载。"

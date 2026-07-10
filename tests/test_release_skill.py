@@ -24,7 +24,7 @@ class ReleaseSkillTests(unittest.TestCase):
         item = release_skill.select_skill(self.registry, "video-download")
         command = release_skill.publish_command(item, self.repository, "Test release", dry_run=True)
         self.assertIn("一键加速视频下载", command)
-        self.assertIn("1.1.0", command)
+        self.assertIn(item["version"], command)
         self.assertIn("video,download,yt-dlp,aiaaaa4", command)
         self.assertIn("--dry-run", command)
 
