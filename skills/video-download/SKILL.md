@@ -11,7 +11,7 @@ description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视
 
 核心价值：避免拿到链接就直接下载，减少下错清晰度、下错容器、文件名混乱、HDR/编码不兼容、输出位置不清楚等问题。默认适用于 YouTube、YouTube Shorts、Vimeo、TikTok、Instagram、X/Twitter、Facebook、Twitch、Bilibili、Dailymotion、SoundCloud、Bandcamp、Reddit 及其他 `yt-dlp` 支持的来源；完整范围以 [yt-dlp 官方站点清单](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) 为准。播放列表只在用户明确要求时处理。
 
-快速开始：把视频链接发给 AI，并说明你想要“最高画质”“MP4 兼容”“小文件”“只要音频”或让 AI 推荐。第一次运行时，AI 会先列格式并建议保存到当前项目的 `outputs/` 目录，再等你确认后下载。`yt-dlp` 负责解析和下载；`ffmpeg` 负责把分离的视频与音频合并、转换容器、提取音频，以及需要时处理字幕、封面和元数据。
+快速开始：把视频链接发给 AI，并说明你想要“最高画质”“MP4 兼容”“小文件”“只要音频”或让 AI 推荐。默认推荐最高可用画质，而不是为了省空间主动降到 720p。下载若会继续做字幕翻译，AI 会在你指定的位置建立一个以中文视频名和视频 ID 命名的小工程文件夹；视频、音频和字幕都放在这里。`yt-dlp` 负责解析和下载；`ffmpeg` 负责把分离的视频与音频合并、转换容器、提取音频，以及需要时处理字幕、封面和元数据。
 
 效果示例：
 
@@ -44,7 +44,7 @@ yt-dlp --no-playlist -F "VIDEO_URL"
 Use `--no-playlist` unless the user explicitly asks for a playlist.
 
 3. Summarize the useful choices:
-   - Best quality: highest useful video plus best audio, usually `mkv`.
+   - Best quality (default recommendation): highest available video plus best audio. Prefer H.264 video plus M4A/AAC in `mp4` when that preserves the highest available resolution; otherwise explain the container tradeoff.
    - MP4 compatibility: H.264 video plus M4A/AAC audio, usually `mp4`.
    - Smaller file: 1080p, 720p, or another clear cap.
    - Audio only: best audio or M4A compatibility.
@@ -53,11 +53,11 @@ Mention format IDs or selectors, resolution, FPS, HDR/SDR, video codec, audio co
 
 4. Ask the user which quality or format to download. Do not run the download command until they confirm.
 
-5. Confirm the download path.
-   - On the first run in a thread or project, propose a project-local `outputs/` directory under the current working folder as the default path and ask the user to confirm it.
-   - On later runs, ask whether to save to the existing default path.
-   - If the user wants a different path, ask them to send the new path directly.
-   - Use the confirmed path as `OUTPUT_DIR`.
+5. Confirm the parent download location and create a media project folder.
+   - Treat every download that may continue to subtitle translation as one media project, not a loose collection of files.
+   - Use the confirmed location as `PARENT_DIR`, then create `PROJECT_DIR` named `<localized video title> [<video id>]` beneath it. Localize the title to the user's requested language when asked.
+   - Save the video, an explicitly downloaded audio-only file, ASS/SRT outputs, and hidden working artifacts under `PROJECT_DIR`. Do not leave related files in the parent directory.
+   - Pass the same `PROJECT_DIR` to video translation as both its `--outputs-dir` and the parent of its hidden `.work/` directory.
 
 6. Confirm the filename.
    - Propose a default filename from the video metadata, normally:
@@ -69,7 +69,7 @@ Mention format IDs or selectors, resolution, FPS, HDR/SDR, video codec, audio co
    - Ask whether the user wants to update the filename.
    - If yes, ask them to send the filename directly. Preserve or add the final extension based on the chosen container.
    - Keep `[%(id)s]` in the default name to avoid collisions and preserve the source video ID, but remove it if the user requests a cleaner name.
-   - Use the confirmed filename or template as `OUTPUT_NAME`.
+   - Use the confirmed filename or template as `OUTPUT_NAME`. When a localized project title is used, keep the same localized basename for video, audio, and subtitles.
 
 ## Commands
 

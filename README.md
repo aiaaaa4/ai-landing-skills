@@ -24,7 +24,7 @@
 
 ### [一键加速视频下载](skills/video-download)
 
-**`aiaaaa4.video-download` · v1.2.0 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
+**`aiaaaa4.video-download` · v1.2.1 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
 
 把一个视频链接交给 Agent，先看清可下载的画质、编码、大小和容器，再决定下载。适合希望保留选择权、又不想手动研究 `yt-dlp` 参数的人。
 
@@ -37,7 +37,7 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.3.3 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.3.4 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，结合 AI 语义分段、术语修复和自动质检，输出中文字幕在上、原文在下的 ASS/SRT。
 

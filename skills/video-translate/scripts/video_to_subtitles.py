@@ -20,20 +20,26 @@ DEFAULT_GLOSSARY = PROJECT_ROOT / "references" / "trading_glossary.md"
 DEFAULT_TERM_RULES = PROJECT_ROOT / "references" / "term_repair_rules.json"
 NORMAL_WORD_LIMIT = 20_000
 LONG_WORD_LIMIT = 50_000
+AUDIO_SUFFIXES = (".m4a", ".mp3", ".aac", ".wav", ".flac", ".ogg", ".opus")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the fixed video subtitle workflow: ffmpeg -> OkFile -> Fun-ASR -> qwen-mt-plus helper segments -> subtitles."
     )
-    parser.add_argument("media", type=Path, help="Input local video file.")
+    parser.add_argument("media", type=Path, help="Input local video or audio file.")
     parser.add_argument(
         "--language",
         default="en",
         help="Source language hint for ASR, for example en, fr, es, it. Translation target is always Chinese.",
     )
     parser.add_argument("--run-id", default=None, help="Run directory name. Defaults to a slug from the media name.")
-    parser.add_argument("--runs-dir", type=Path, default=PROJECT_ROOT / "runs")
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        default=None,
+        help="Working directory. Defaults to .work/<run-id> inside the subtitle output directory.",
+    )
     parser.add_argument("--outputs-dir", type=Path, default=None)
     parser.add_argument("--segments", type=Path, default=None, help="Optional completed segments.txt to copy in.")
     parser.add_argument(
@@ -84,6 +90,36 @@ def language_slug(value: str) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", value)
     value = value.strip("-")
     return value or "src"
+
+
+def default_subtitle_tag(language: str) -> str:
+    source_labels = {
+        "en": "英",
+        "eng": "英",
+        "english": "英",
+        "fr": "法",
+        "fra": "法",
+        "fre": "法",
+        "french": "法",
+        "es": "西",
+        "spa": "西",
+        "spanish": "西",
+        "it": "意",
+        "ita": "意",
+        "italian": "意",
+    }
+    return f"中{source_labels.get(language.lower().strip(), language_slug(language))}双语字幕"
+
+
+def resolve_asr_media(media: Path) -> Path:
+    """Reuse a downloader-provided sibling audio file when it matches the media basename."""
+    if media.suffix.lower() in AUDIO_SUFFIXES:
+        return media
+    for suffix in AUDIO_SUFFIXES:
+        candidate = media.with_suffix(suffix)
+        if candidate.exists() and candidate.stat().st_size > 0:
+            return candidate
+    return media
 
 
 def default_outputs_dir() -> Path:
@@ -719,26 +755,35 @@ def main() -> int:
         return 2
 
     run_id = args.run_id or slugify(media.stem)
-    runs_dir = args.runs_dir
-    if not runs_dir.is_absolute():
-        runs_dir = PROJECT_ROOT / runs_dir
     outputs_dir = args.outputs_dir or default_outputs_dir()
     if not outputs_dir.is_absolute():
         outputs_dir = PROJECT_ROOT / outputs_dir
+
+    runs_dir = args.runs_dir or (outputs_dir / ".work")
+    if not runs_dir.is_absolute():
+        runs_dir = PROJECT_ROOT / runs_dir
 
     run_dir = runs_dir / run_id
     transcript_dir = run_dir / "transcript"
     work_dir = run_dir / "work"
     subtitles_dir = run_dir / "subtitles"
     work_dir.mkdir(parents=True, exist_ok=True)
-    record_step_status(work_dir, "start", "running", f"media={media}; language={args.language}")
-    output_tag = args.subtitle_tag or f"zh-{language_slug(args.language)}"
+    asr_media = resolve_asr_media(media)
+    record_step_status(
+        work_dir,
+        "start",
+        "running",
+        f"media={media}; asr_media={asr_media}; language={args.language}",
+    )
+    output_tag = args.subtitle_tag or default_subtitle_tag(args.language)
     # Strip stray whitespace from the video name so outputs never contain
     # names like "Example .zh-en.ass".
     output_base = f"{media.stem.strip()}.{output_tag}"
 
     print(f"Run: {run_id}", flush=True)
     print(f"Media: {media}", flush=True)
+    if asr_media != media:
+        print(f"Reusing downloader-provided audio for ASR: {asr_media}", flush=True)
     print(f"Run dir: {run_dir}", flush=True)
     print(f"Outputs: {outputs_dir}", flush=True)
     print_run_expectation(media)
@@ -752,7 +797,7 @@ def main() -> int:
 
     record_step_status(work_dir, "transcription", "running")
     step_started = time.monotonic()
-    ensure_transcript(media, transcript_dir, args.language)
+    ensure_transcript(asr_media, transcript_dir, args.language)
     record_step_timing(work_dir, "transcription", time.monotonic() - step_started, f"ASR language={args.language}")
     record_step_status(work_dir, "transcription", "done")
 

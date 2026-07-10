@@ -27,6 +27,7 @@ PROVIDERS = {
 }
 
 RETRYABLE_HTTP_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+AUDIO_SUFFIXES = {".m4a", ".mp3", ".aac", ".wav", ".flac", ".ogg", ".opus"}
 
 
 def api_retry_attempts() -> int:
@@ -109,6 +110,9 @@ def require_ffmpeg() -> None:
 
 
 def extract_audio(media: Path, out_dir: Path) -> Path:
+    if media.suffix.lower() in AUDIO_SUFFIXES:
+        print(f"Using supplied audio without ffmpeg extraction: {media}", flush=True)
+        return media
     require_ffmpeg()
     out_dir.mkdir(parents=True, exist_ok=True)
     audio_path = out_dir / "api_upload_audio.mp3"
@@ -141,11 +145,12 @@ def multipart_body(fields: dict[str, str], file_field: str, file_path: Path) -> 
         chunks.append(b"\r\n")
 
     chunks.append(f"--{boundary}\r\n".encode())
+    content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
     chunks.append(
         (
             f'Content-Disposition: form-data; name="{file_field}"; '
             f'filename="{file_path.name}"\r\n'
-            "Content-Type: audio/mpeg\r\n\r\n"
+            f"Content-Type: {content_type}\r\n\r\n"
         ).encode()
     )
     chunks.append(file_path.read_bytes())
