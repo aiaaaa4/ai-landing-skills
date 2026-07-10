@@ -73,9 +73,11 @@ def check_ffmpeg(errors: list[str]) -> None:
             print("Install hint: use your package manager, for example apt install ffmpeg")
         return
 
-    result = subprocess.run([ffmpeg, "-version"], check=False, capture_output=True, text=True)
-    first_line = result.stdout.splitlines()[0] if result.stdout else ffmpeg
-    print(f"ffmpeg: {first_line}")
+    result = subprocess.run([ffmpeg, "-version"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if result.returncode == 0:
+        print(f"ffmpeg: available at {ffmpeg}")
+    else:
+        errors.append("[VTZ-E002] ffmpeg did not run successfully.")
 
 
 def check_env_values(errors: list[str]) -> None:
@@ -118,7 +120,7 @@ def main() -> int:
         print("\nEnvironment check failed:")
         for error in errors:
             print(f"- {error}")
-        print("\nCreate/update the local .env file next to the scripts folder; see SKILL.md or README.md for the template.")
+        print("\nCreate/update the local .env file only after reviewing the required provider credentials in SKILL.md.")
         return 1
 
     print("\nEnvironment check passed.")

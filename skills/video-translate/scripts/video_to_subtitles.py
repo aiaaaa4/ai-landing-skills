@@ -187,10 +187,6 @@ def print_run_expectation(media: Path) -> None:
 def model_name_from_env(explicit: str | None = None) -> str:
     if explicit:
         return explicit
-    for key in ("ORCHESTRATOR_MODEL", "WORKBUDDY_MODEL", "CODEX_MODEL", "AI_MODEL"):
-        value = os.environ.get(key, "").strip()
-        if value:
-            return value
     return "current orchestrating AI (not recorded)"
 
 
@@ -453,7 +449,7 @@ def classify_failure(message: str) -> tuple[str, str, list[str]]:
             "AI segment contract failure",
             [
                 "The AI runner should repair segments.txt using prompt.txt, final_qa_prompt.txt, and final_qa_report.md.",
-                "Do not ask the user to manually edit unless two AI repair attempts still fail.",
+                "Escalate for user review only after two automatic repair attempts still fail.",
             ],
         )
     return (
@@ -592,7 +588,7 @@ def write_run_summary(
     blocker_total = summary_counts.get("Blockers", "unknown")
     top_warning_lines = [f"- {name}: {count}" for name, count in warning_types.most_common(8)]
     if not top_warning_lines:
-        top_warning_lines = ["- No warning type breakdown available."]
+        top_warning_lines = ["- No QA warning categories detected."]
 
     duration_text = "unknown"
     if isinstance(media_duration, (int, float)):

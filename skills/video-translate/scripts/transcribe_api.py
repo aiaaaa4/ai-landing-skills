@@ -201,7 +201,7 @@ def request_json(
 
 
 def okfile_token() -> str | None:
-    return os.environ.get("OKFILE_TOKEN") or os.environ.get("OKFILE_API_KEY")
+    return os.environ.get("OKFILE_TOKEN")
 
 
 def require_https_url(url: str, label: str) -> None:
@@ -624,7 +624,6 @@ def main() -> int:
     provider_cfg = PROVIDERS[args.provider]
     model = args.model or provider_cfg["default_model"]
 
-    load_env(args.env_file)
     if not args.confirm_external_processing:
         print(
             "Refusing external processing without --confirm-external-processing. "
@@ -632,6 +631,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    load_env(args.env_file)
     api_key = os.environ.get(provider_cfg["key_env"])
     if not has_real_secret(api_key):
         print(
