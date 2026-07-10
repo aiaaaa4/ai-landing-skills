@@ -35,9 +35,11 @@ The `rithmic-signup` app is private and is not part of this public repository.
 
 - `registry.json` is the source for public IDs, names, paths, versions, and platform targets.
 - Installable skill folders stay lean: `SKILL.md` plus required `agents/`, `scripts/`, `references/`, or assets.
-- Generated outputs, private `.env` files, local runtime data, logs, downloaded media, subtitle outputs, zip packages, and `local-projects/` stay out of Git.
-- Publish one skill at a time. Combined workflows are intentionally deferred.
+- Generated outputs, private `.env` files, local runtime data, logs, downloaded media, subtitle outputs, zip packages, and `local-projects/` stay out of Git. Legacy archives are not release sources.
+- Publish one skill at a time from the GitHub Actions `Publish ClawHub skill` workflow. Always use its dry-run before a public release.
 - Public release to GitHub, ClawHub, skills.sh, or any other platform requires explicit confirmation.
+
+See [docs/RELEASING.md](docs/RELEASING.md) for the complete local-to-platform workflow.
 
 ## Local Structure
 

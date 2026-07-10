@@ -1,23 +1,46 @@
-name: Publish ClawHub skills
+name: Publish ClawHub skill
 
 on:
   workflow_dispatch:
     inputs:
+      skill:
+        description: Skill to publish
+        required: true
+        type: choice
+        options:
+          - video-download
+          - video-translate
+          - cloud-file-mgmt
+      changelog:
+        description: Short public summary of this release
+        required: true
+        type: string
       dry_run:
-        description: Preview publishing without creating releases
+        description: Preview the selected release without creating a version
         required: true
         default: false
         type: boolean
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
-    uses: openclaw/clawhub/.github/workflows/skill-publish.yml@main
-    with:
-      owner: aiaaaa4
-      dry_run: ${{ inputs.dry_run }}
-    secrets:
-      clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Publish selected skill
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+          RELEASE_CHANGELOG: ${{ inputs.changelog }}
+          RELEASE_DRY_RUN: ${{ inputs.dry_run }}
+          RELEASE_SKILL: ${{ inputs.skill }}
+        run: |
+          args=(--skill "$RELEASE_SKILL" --changelog "$RELEASE_CHANGELOG")
+          if [[ "$RELEASE_DRY_RUN" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          python3 tools/release_skill.py "${args[@]}"
