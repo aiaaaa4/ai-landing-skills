@@ -9,9 +9,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 
 REQUIRED_ENV = ("DASHSCOPE_API_KEY", "ALIYUN_WORKSPACE_ID", "OKFILE_TOKEN")
@@ -34,7 +31,6 @@ ENV_SETUP_HINTS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check the video subtitle workflow environment.")
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
-    parser.add_argument("--network", action="store_true", help="Also probe OkFile network access.")
     parser.add_argument("--json", action="store_true", help="Print a machine-readable JSON result for automation runners.")
     return parser.parse_args()
 
@@ -94,39 +90,7 @@ def check_env_values(errors: list[str]) -> None:
             errors.append(message)
 
     region = os.environ.get("ALIYUN_REGION") or "cn-beijing"
-    upload_url = os.environ.get("OKFILE_UPLOAD_URL") or "https://www.okfile.com/api/upload/quick"
     print(f"ALIYUN_REGION: {region}")
-    print(f"OKFILE_UPLOAD_URL: {upload_url}")
-
-
-def check_okfile_network(errors: list[str]) -> None:
-    upload_url = os.environ.get("OKFILE_UPLOAD_URL") or "https://www.okfile.com/api/upload/quick"
-    token = os.environ.get("OKFILE_TOKEN") or os.environ.get("OKFILE_API_KEY") or ""
-    parsed = urlsplit(upload_url)
-    config_url = f"{parsed.scheme}://{parsed.netloc}/api/upload/config"
-    request = Request(
-        config_url,
-        headers={
-            "X-API-Key": token,
-            "User-Agent": "codex-video-subtitle-workflow/0.1",
-        },
-    )
-    try:
-        with urlopen(request, timeout=20) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        errors.append(f"[VTZ-E003] OkFile config probe returned HTTP {exc.code}.")
-        return
-    except URLError as exc:
-        errors.append(f"[VTZ-E003] OkFile config probe failed: {exc}.")
-        return
-
-    print(
-        "OkFile config: "
-        f"quickUploadMaxSize={data.get('quickUploadMaxSize')} "
-        f"multipartThreshold={data.get('multipartThreshold')} "
-        f"maxSize={data.get('maxSize')}"
-    )
 
 
 def main() -> int:
@@ -138,9 +102,6 @@ def main() -> int:
     check_python(errors)
     check_ffmpeg(errors)
     check_env_values(errors)
-    if args.network:
-        check_okfile_network(errors)
-
     if args.json:
         result = {
             "ok": not errors,

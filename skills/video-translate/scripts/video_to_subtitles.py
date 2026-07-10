@@ -74,6 +74,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-first", action="store_true", help="Put source line above Chinese line.")
     parser.add_argument("--orchestrator-model", default=None, help="Name of the AI model orchestrating this run, for the final chat summary.")
     parser.add_argument("--translation-model", default="qwen-mt-plus", help="Name of the model used for segments.txt. Production default: qwen-mt-plus.")
+    parser.add_argument(
+        "--confirm-external-processing",
+        action="store_true",
+        help="Required acknowledgement before the selected media is sent to OkFile and Alibaba services.",
+    )
     parser.add_argument("--skip-env-check", action="store_true")
     return parser.parse_args()
 
@@ -287,13 +292,14 @@ def ensure_ai_segments(work_dir: Path, transcript_dir: Path, language: str, doma
         "8",
         "--qwen-mt-min-interval-seconds",
         "1.0",
+        "--confirm-external-processing",
     ]
     if screen_context.exists() and screen_context.stat().st_size > 0:
         cmd.extend(["--screen-context", str(screen_context)])
     run_step(cmd)
 
 
-def ensure_transcript(media: Path, transcript_dir: Path, language: str) -> None:
+def ensure_transcript(media: Path, transcript_dir: Path, language: str, confirm_external_processing: bool) -> None:
     transcript_path = transcript_dir / "transcript_words.json"
     if transcript_path.exists():
         transcript = read_json(transcript_path)
@@ -317,6 +323,7 @@ def ensure_transcript(media: Path, transcript_dir: Path, language: str) -> None:
             str(transcript_dir),
             "--language",
             language,
+            "--confirm-external-processing",
         ]
     )
 
@@ -418,7 +425,7 @@ def classify_failure(message: str) -> tuple[str, str, list[str]]:
             "VTZ-E003",
             "OkFile upload or URL failure",
             [
-                "Check OKFILE_TOKEN, OKFILE_UPLOAD_URL, network access, upload quota, and whether the cached URL expired.",
+                "Check OKFILE_TOKEN, network access, upload quota, and whether the cached URL expired.",
                 "Rerun with the same --run-id so completed local stages can be reused.",
             ],
         )
@@ -757,6 +764,13 @@ def main() -> int:
     if not media.exists():
         print(f"Input media not found: {media}", file=sys.stderr)
         return 2
+    if not args.confirm_external_processing:
+        print(
+            "Refusing external processing without --confirm-external-processing. "
+            "This workflow uploads the selected audio to OkFile and sends audio/text to Alibaba services.",
+            file=sys.stderr,
+        )
+        return 2
 
     run_id = args.run_id or slugify(media.stem)
     outputs_dir = args.outputs_dir or default_outputs_dir()
@@ -801,7 +815,7 @@ def main() -> int:
 
     record_step_status(work_dir, "transcription", "running")
     step_started = time.monotonic()
-    ensure_transcript(asr_media, transcript_dir, args.language)
+    ensure_transcript(asr_media, transcript_dir, args.language, args.confirm_external_processing)
     record_step_timing(work_dir, "transcription", time.monotonic() - step_started, f"ASR language={args.language}")
     record_step_status(work_dir, "transcription", "done")
 

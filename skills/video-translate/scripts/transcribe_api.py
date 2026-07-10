@@ -5,6 +5,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -28,6 +29,9 @@ PROVIDERS = {
 
 RETRYABLE_HTTP_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 AUDIO_SUFFIXES = {".m4a", ".mp3", ".aac", ".wav", ".flac", ".ogg", ".opus"}
+OKFILE_UPLOAD_URL = "https://www.okfile.com/api/upload/quick"
+OKFILE_ORIGIN = "https://www.okfile.com"
+IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$", re.IGNORECASE)
 
 
 def api_retry_attempts() -> int:
@@ -73,11 +77,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--language", default="en", help="Source language hint such as en, fr, es, it.")
     parser.add_argument("--out-dir", type=Path, default=Path("runs/api-transcript"))
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
-    parser.add_argument("--file-url", default=None, help="Public HTTP/HTTPS audio URL for URL-based ASR APIs.")
     parser.add_argument("--workspace-id", default=None, help="Alibaba Model Studio workspace ID.")
     parser.add_argument("--region", default=None, help="Alibaba region, for example cn-beijing.")
     parser.add_argument("--vocabulary-id", default=None, help="Alibaba Fun-ASR hotword vocabulary ID.")
-    parser.add_argument("--upload-provider", choices=["none", "okfile"], default=None)
+    parser.add_argument(
+        "--confirm-external-processing",
+        action="store_true",
+        help="Required acknowledgement before the selected audio is uploaded to OkFile and submitted to Alibaba Fun-ASR.",
+    )
     parser.add_argument("--poll-interval", type=float, default=10.0, help="Seconds between async task polls.")
     parser.add_argument("--timeout", type=float, default=7200.0, help="Async task timeout in seconds.")
     parser.add_argument("--keep-audio", action="store_true", help="Keep extracted API upload audio in out-dir.")
@@ -197,9 +204,18 @@ def okfile_token() -> str | None:
     return os.environ.get("OKFILE_TOKEN") or os.environ.get("OKFILE_API_KEY")
 
 
-def okfile_origin(upload_url: str) -> str:
-    parsed = urlsplit(upload_url)
-    return f"{parsed.scheme}://{parsed.netloc}"
+def require_https_url(url: str, label: str) -> None:
+    parsed = urlsplit(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise RuntimeError(f"{label} must be an HTTPS URL.")
+
+
+def validated_aliyun_base_url(workspace_id: str, region: str) -> str:
+    if not IDENTIFIER_RE.fullmatch(workspace_id):
+        raise RuntimeError("ALIYUN_WORKSPACE_ID must contain only letters, digits, and hyphens.")
+    if not IDENTIFIER_RE.fullmatch(region):
+        raise RuntimeError("ALIYUN_REGION must contain only letters, digits, and hyphens.")
+    return f"https://{workspace_id}.{region}.maas.aliyuncs.com"
 
 
 def okfile_auth_headers(token: str) -> dict[str, str]:
@@ -213,6 +229,7 @@ def okfile_public_url(response: dict) -> str:
     public_url = str(response.get("downloadUrl") or response.get("url") or "")
     if not public_url:
         raise RuntimeError(f"OkFile response did not include downloadUrl or url: {response}")
+    require_https_url(public_url, "OkFile public URL")
     return public_url
 
 
@@ -224,6 +241,7 @@ def okfile_upload_quick(audio_path: Path, upload_url: str, token: str) -> dict:
 
 
 def put_file(url: str, data: bytes, content_type: str) -> None:
+    require_https_url(url, "OkFile signed upload URL")
     request = Request(
         url,
         data=data,
@@ -238,7 +256,6 @@ def put_file(url: str, data: bytes, content_type: str) -> None:
 
 
 def okfile_upload_standard(audio_path: Path, upload_url: str, token: str, config: dict) -> dict:
-    origin = okfile_origin(upload_url)
     content_type = mimetypes.guess_type(audio_path.name)[0] or "application/octet-stream"
     preferred_part_size = int(config.get("partSize") or 10 * 1024 * 1024)
     payload = {
@@ -248,7 +265,7 @@ def okfile_upload_standard(audio_path: Path, upload_url: str, token: str, config
         "preferredPartSize": preferred_part_size,
     }
     prepare = request_json(
-        f"{origin}/api/upload/prepare",
+        f"{OKFILE_ORIGIN}/api/upload/prepare",
         method="POST",
         payload=payload,
         headers=okfile_auth_headers(token),
@@ -272,7 +289,7 @@ def okfile_upload_standard(audio_path: Path, upload_url: str, token: str, config
         raise RuntimeError(f"Unknown OkFile upload mode: {prepare}")
 
     complete = request_json(
-        f"{origin}/api/upload/complete",
+        f"{OKFILE_ORIGIN}/api/upload/complete",
         method="POST",
         payload={"id": prepare["id"]},
         headers=okfile_auth_headers(token),
@@ -290,8 +307,7 @@ def upload_audio_to_okfile(audio_path: Path, out_dir: Path) -> str:
     if not has_real_secret(token):
         raise RuntimeError("Missing OKFILE_TOKEN in .env. Create an OkFile API key and store the full token locally.")
 
-    upload_url = os.environ.get("OKFILE_UPLOAD_URL") or "https://www.okfile.com/api/upload/quick"
-    origin = okfile_origin(upload_url)
+    upload_url = OKFILE_UPLOAD_URL
 
     cached_response = out_dir / "okfile_upload_response.json"
     if cached_response.exists():
@@ -304,7 +320,7 @@ def upload_audio_to_okfile(audio_path: Path, out_dir: Path) -> str:
             except Exception as exc:
                 print(f"Ignoring stale/invalid OkFile upload cache: {exc}", flush=True)
 
-    config = request_json(f"{origin}/api/upload/config", headers=okfile_auth_headers(str(token)))
+    config = request_json(f"{OKFILE_ORIGIN}/api/upload/config", headers=okfile_auth_headers(str(token)))
     write_json(out_dir / "okfile_upload_config.json", config)
 
     size = audio_path.stat().st_size
@@ -323,7 +339,7 @@ def upload_audio_to_okfile(audio_path: Path, out_dir: Path) -> str:
 
 
 def aliyun_base_url(workspace_id: str, region: str) -> str:
-    return f"https://{workspace_id}.{region}.maas.aliyuncs.com"
+    return validated_aliyun_base_url(workspace_id, region)
 
 
 def submit_aliyun_fun_asr(
@@ -489,17 +505,10 @@ def transcribe_aliyun_fun_asr(args: argparse.Namespace, api_key: str, model: str
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     audio_path: Path | None = None
-    if not args.file_url:
-        print("Extracting okfile upload audio...", flush=True)
-        audio_path = extract_audio(args.media, args.out_dir)
-        print(f"Audio upload file: {audio_path} ({audio_path.stat().st_size / 1024 / 1024:.1f} MB)", flush=True)
-        upload_provider = args.upload_provider or os.environ.get("ALIYUN_ASR_UPLOAD") or "okfile"
-        if upload_provider == "okfile":
-            args.file_url = upload_audio_to_okfile(audio_path, args.out_dir)
-        else:
-            print(f"Upload this file to okfile, then rerun with --file-url:", flush=True)
-            print(audio_path, flush=True)
-            return 3
+    print("Preparing selected audio for OkFile upload...", flush=True)
+    audio_path = extract_audio(args.media, args.out_dir)
+    print(f"Audio upload file: {audio_path} ({audio_path.stat().st_size / 1024 / 1024:.1f} MB)", flush=True)
+    args.file_url = upload_audio_to_okfile(audio_path, args.out_dir)
 
     submit_path = args.out_dir / "aliyun_task_submit.json"
     result_path = args.out_dir / "aliyun_task_result.json"
@@ -616,6 +625,13 @@ def main() -> int:
     model = args.model or provider_cfg["default_model"]
 
     load_env(args.env_file)
+    if not args.confirm_external_processing:
+        print(
+            "Refusing external processing without --confirm-external-processing. "
+            "This uploads the selected audio to OkFile and sends its temporary URL to Alibaba Fun-ASR.",
+            file=sys.stderr,
+        )
+        return 2
     api_key = os.environ.get(provider_cfg["key_env"])
     if not has_real_secret(api_key):
         print(

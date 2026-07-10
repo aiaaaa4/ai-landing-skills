@@ -151,6 +151,38 @@ class PipelineScriptsTest(unittest.TestCase):
         self.assertIn("word_coverage_gap", report)
         self.assertIn(dropped["source_raw"].split()[0], report.lower())
 
+    def test_external_processing_requires_explicit_confirmation(self):
+        result = run_script(
+            "generate_segments_with_dashscope.py",
+            str(EXAMPLES_DIR / "transcript_words.json"),
+            "--out",
+            str(self.tmp_dir / "segments.txt"),
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--confirm-external-processing", result.stdout + result.stderr)
+
+    def test_cleanup_is_limited_to_a_marked_workflow_run(self):
+        run_dir = self.tmp_dir / "project" / ".work" / "safe-run"
+        work_dir = run_dir / "work"
+        work_dir.mkdir(parents=True)
+        (work_dir / "workflow_status.json").write_text("{}", encoding="utf-8")
+        cache = work_dir / "dashscope_translation_cache.json"
+        cache.write_text("{}", encoding="utf-8")
+
+        missing_ack = run_script("clean_run.py", str(run_dir), "--confirm")
+        self.assertNotEqual(missing_ack.returncode, 0)
+        self.assertTrue(cache.exists())
+
+        confirmed = run_script(
+            "clean_run.py",
+            str(run_dir),
+            "--confirm",
+            "--acknowledge-run-id",
+            "safe-run",
+        )
+        self.assertEqual(confirmed.returncode, 0, confirmed.stderr)
+        self.assertFalse(cache.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

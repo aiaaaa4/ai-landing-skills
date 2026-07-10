@@ -21,6 +21,7 @@ DEFAULT_FALLBACK_MODEL = ""
 GENERAL_CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"  # Not used by qwen-mt-*; qwen-mt uses workspace URL from qwen_mt_chat_url(env).
 QWEN_MT_PREFIX = "qwen-mt-"
 QWEN_MT_TARGET_LANG = "Chinese"
+ALIYUN_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$", re.IGNORECASE)
 QWEN_MT_SOURCE_LANG_MAP = {
     "english": "English",
     "en": "English",
@@ -85,6 +86,11 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.0,
         help="Minimum interval between qwen-mt requests. Keep production runs at 1 second or higher.",
+    )
+    parser.add_argument(
+        "--confirm-external-processing",
+        action="store_true",
+        help="Required acknowledgement before transcript text is sent to Alibaba qwen-mt-plus.",
     )
     return parser.parse_args()
 
@@ -226,6 +232,10 @@ def qwen_mt_chat_url(env: dict[str, str]) -> str:
     region = (env.get("ALIYUN_REGION") or "cn-beijing").strip() or "cn-beijing"
     if not workspace_id:
         raise RuntimeError("ALIYUN_WORKSPACE_ID is required when using qwen-mt-plus helper.")
+    if not ALIYUN_IDENTIFIER_RE.fullmatch(workspace_id):
+        raise RuntimeError("ALIYUN_WORKSPACE_ID must contain only letters, digits, and hyphens.")
+    if not ALIYUN_IDENTIFIER_RE.fullmatch(region):
+        raise RuntimeError("ALIYUN_REGION must contain only letters, digits, and hyphens.")
     return f"https://{workspace_id}.{region}.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
 
 
@@ -539,6 +549,11 @@ def write_segments(path: Path, chunks: list[SegmentChunk], translations: dict[st
 def main() -> int:
     args = parse_args()
     started_at = time.monotonic()
+    if not args.confirm_external_processing:
+        raise SystemExit(
+            "Refusing external processing without --confirm-external-processing. "
+            "This sends subtitle text to Alibaba qwen-mt-plus."
+        )
     env = load_env(args.env)
     api_key = env.get("DASHSCOPE_API_KEY")
     if not api_key:

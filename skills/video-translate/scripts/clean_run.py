@@ -50,8 +50,13 @@ KEEP_NOTES = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Clean disposable files from a completed video subtitle run.")
-    parser.add_argument("run_dir", type=Path, help="Run directory, for example runs/my-video.")
+    parser.add_argument("run_dir", type=Path, help="Run directory in an output project's .work/<run-id> folder.")
     parser.add_argument("--confirm", action="store_true", help="Actually delete files. Without this, only print a dry run.")
+    parser.add_argument(
+        "--acknowledge-run-id",
+        default="",
+        help="Required with --confirm. Must exactly match the final run-directory name.",
+    )
     parser.add_argument(
         "--aggressive",
         action="store_true",
@@ -64,6 +69,14 @@ def resolve_run_dir(path: Path) -> Path:
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path.resolve()
+
+
+def validate_run_dir(run_dir: Path) -> None:
+    if run_dir.parent.name != ".work":
+        raise SystemExit("Refusing cleanup outside an output project's .work/<run-id> directory.")
+    marker = run_dir / "work" / "workflow_status.json"
+    if not marker.is_file():
+        raise SystemExit(f"Refusing cleanup because the workflow marker is missing: {marker}")
 
 
 def collect_paths(run_dir: Path, aggressive: bool) -> list[Path]:
@@ -118,6 +131,9 @@ def main() -> int:
     run_dir = resolve_run_dir(args.run_dir)
     if not run_dir.exists() or not run_dir.is_dir():
         raise SystemExit(f"Run directory not found: {run_dir}")
+    validate_run_dir(run_dir)
+    if args.confirm and args.acknowledge_run_id != run_dir.name:
+        raise SystemExit("Refusing deletion: --acknowledge-run-id must exactly match the selected run directory.")
 
     targets = collect_paths(run_dir, args.aggressive)
     total = sum(path_size(path) for path in targets)
@@ -138,7 +154,7 @@ def main() -> int:
         print(f"- {note}")
 
     if not args.confirm:
-        print("\nDry run only. Re-run with --confirm after the final subtitles are accepted.")
+        print("\nDry run only. Re-run with --confirm --acknowledge-run-id <run-id> after the final subtitles are accepted.")
         return 0
 
     for path in sorted(targets, key=lambda p: len(p.parts), reverse=True):

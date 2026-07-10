@@ -13,6 +13,7 @@ DISALLOWED_PARTS = {".env", "outputs", "runtime", ".DS_Store", "__pycache__", ".
 DISALLOWED_SUFFIXES = {".mp4", ".mov", ".mkv", ".zip", ".log", ".pyc"}
 LOCAL_ONLY_DIRS = {".git", "local-projects"}
 SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$")
+ALLOWED_SKILL_FRONTMATTER_KEYS = {"name", "description", "permissions", "metadata"}
 
 
 def fail(message: str) -> None:
@@ -30,6 +31,9 @@ def parse_frontmatter(path: Path) -> dict[str, str]:
         if line == "---":
             return fields
         if not line.strip():
+            continue
+        if line[0].isspace():
+            # Nested YAML belongs to the preceding top-level metadata field.
             continue
         if ":" not in line:
             fail(f"{path.relative_to(ROOT)} has invalid frontmatter line: {line}")
@@ -109,8 +113,12 @@ def validate_skills(items: list[dict]) -> None:
         path = ROOT / item["path"] / "SKILL.md"
         fields = parse_frontmatter(path)
         keys = set(fields)
-        if keys != {"name", "description"}:
-            fail(f"{path.relative_to(ROOT)} frontmatter keys must be exactly name and description; got {sorted(keys)}")
+        if not {"name", "description"}.issubset(keys) or not keys.issubset(ALLOWED_SKILL_FRONTMATTER_KEYS):
+            fail(
+                f"{path.relative_to(ROOT)} frontmatter must contain name and description, "
+                f"with only supported optional keys {sorted(ALLOWED_SKILL_FRONTMATTER_KEYS - {'name', 'description'})}; "
+                f"got {sorted(keys)}"
+            )
         if fields["name"] != item["slug"]:
             fail(f"{path.relative_to(ROOT)} name must match registry slug {item['slug']}")
         if not fields["description"]:

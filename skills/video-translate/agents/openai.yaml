@@ -2,7 +2,7 @@
 # Author information is for display and source identification, not an additional license restriction.
 interface:
   display_name: "人工级视频字幕翻译"
-  short_description: "把本地视频或音频转为高质量双语字幕；自动复用同名音频，完成词级转写、翻译、术语修复、质检和 ASS/SRT 导出。"
-  default_prompt: "使用 $video-translate 处理这个本地媒体项目。先检查并打开本机 .env 配置，确认源语言、目标语言和屏幕上下文；复用同名音频后以 Fun-ASR + qwen-mt-plus 生成高质量字幕。"
+  short_description: "在用户明确同意后，将其指定的本地媒体转为双语字幕；音频会发送至 OkFile 与阿里云处理。"
+  default_prompt: "仅在用户明确请求视频字幕翻译时使用 $video-translate。先确认唯一媒体路径、源语言、输出目录、是否需要屏幕上下文，并获得将该媒体音频上传至 OkFile 和阿里云处理的明确同意。未经同意，不读取或创建 .env、不运行命令、不访问本地媒体或网络。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

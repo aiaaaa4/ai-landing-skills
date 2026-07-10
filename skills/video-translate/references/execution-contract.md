@@ -48,9 +48,7 @@ DASHSCOPE_API_KEY=...
 ALIYUN_WORKSPACE_ID=...
 ALIYUN_REGION=cn-beijing
 ALIYUN_ASR_MODEL=fun-asr
-ALIYUN_ASR_UPLOAD=okfile
 ALIYUN_ASR_VOCABULARY_ID=
-OKFILE_UPLOAD_URL=https://www.okfile.com/api/upload/quick
 OKFILE_TOKEN=...
 
 ```
@@ -68,7 +66,6 @@ On a new device or first run, always check the environment before processing med
 
 ```bash
 python scripts/check_env.py
-python scripts/check_env.py --network
 ```
 
 If the check fails, fix the environment before running transcription. For missing tools such as `ffmpeg`, give the platform-specific install command or request user approval before installing. Do not silently install system tools. On later runs, skip repeated environment setup only when the same environment already passed the check.
@@ -86,7 +83,7 @@ For non-finance domains, keep the pipeline but ask for or maintain a domain glos
 First use message after environment check, in Chinese:
 
 ```text
-这套工作流会先在本地提取音频，通过 OkFile 生成临时音频链接，再用阿里 Fun-ASR 做词级转写；随后固定调用阿里 qwen-mt-plus 生成分段翻译，最后由当前 AI agent 做时间轴匹配、术语修复、质检和 ASS/SRT 导出。当前固定模型组合是多轮视频测试后效果和性价比最稳的方案：转写用 Fun-ASR，分段翻译用 qwen-mt-plus；WorkBuddy 编排建议用 DeepSeek V4 Pro，Codex/Cursor 编排建议用 GPT 5.5 级模型。请准备 DASHSCOPE_API_KEY、ALIYUN_WORKSPACE_ID、OKFILE_TOKEN 并写入 .env，准备好后把本地视频路径发来即可。详细说明可看：视频翻译工作流说明书.md。
+这套工作流会先在本地准备所选视频的音频，通过 OkFile 生成临时音频链接，再用阿里 Fun-ASR 做词级转写；随后固定调用阿里 qwen-mt-plus 生成分段翻译，最后由当前 AI agent 做时间轴匹配、术语修复、质检和 ASS/SRT 导出。音频会上传至 OkFile，临时链接会发送给阿里 Fun-ASR，字幕文本会发送给阿里 qwen-mt-plus；只有在你明确同意后才会开始外发。当前固定模型组合是多轮视频测试后效果和性价比最稳的方案：转写用 Fun-ASR，分段翻译用 qwen-mt-plus；WorkBuddy 编排建议用 DeepSeek V4 Pro，Codex/Cursor 编排建议用 GPT 5.5 级模型。请准备 DASHSCOPE_API_KEY、ALIYUN_WORKSPACE_ID、OKFILE_TOKEN 并写入 .env，准备好后把本地视频路径发来即可。详细说明可看：视频翻译工作流说明书.md。
 ```
 
 Before starting each user-provided video, confirm only these points unless already clear:
@@ -95,6 +92,7 @@ Before starting each user-provided video, confirm only these points unless alrea
 2. Target language: default Chinese. Current glossary, QA rules, subtitle style, and hotword policy are optimized for Chinese output. Other targets require target-specific rules before production quality is claimed.
 3. Screen context: ask whether the video contains dense or important visible text, PPT/slides, charts, software UI, code, signs, or meaningful images not fully spoken aloud. Keep it off by default; enabling it may increase time and cost.
 4. Subtitle output directory: default to the project-level `outputs/` directory. Ask the user to confirm this default; if they want a different location, ask for the absolute or project-relative path and pass it with `--outputs-dir "<path>"`.
+5. External-processing consent: before any command runs, state that the selected audio is uploaded only to `https://www.okfile.com`; its temporary URL is sent to Alibaba Fun-ASR; and subtitle text is sent to Alibaba qwen-mt-plus. Proceed only after an explicit affirmative answer.
 
 Do not ask the user to select ASR/helper/orchestration models during ordinary production runs.
 
@@ -105,6 +103,8 @@ Do not ask the user to select ASR/helper/orchestration models during ordinary pr
 - Default target language is Chinese, and the current prompts, QA rules, glossary, subtitle style, and hotword assumptions are Chinese-output oriented. Other target languages require target-specific extensions before production use.
 - Low-quality audio, heavy accents, overlapping speakers, and noisy recordings can significantly reduce ASR accuracy.
 - Optional screen context is for visual-text assistance only and stays off by default.
+- The workflow reads only the selected media, an optional same-basename audio file, and its local `.env`; it writes only to the confirmed output folder and its `.work/<run-id>` subfolder.
+- The skill never searches for credentials, scans unrelated files, installs software, uses `sudo`, or accepts arbitrary upload endpoints. Network processing is rejected unless the caller supplies `--confirm-external-processing`.
 
 ## Troubleshooting Contract
 
@@ -112,7 +112,7 @@ When a run fails, identify the failure category, quote the code if present, and 
 
 - `VTZ-E001` environment or secret configuration: run `python scripts/check_env.py`; install missing Python/ffmpeg or fill `.env`.
 - `VTZ-E002` ffmpeg: install ffmpeg and rerun `python scripts/check_env.py`.
-- `VTZ-E003` OkFile: check `OKFILE_TOKEN`, `OKFILE_UPLOAD_URL`, network access, quota, and cached URL age; rerun the same command.
+- `VTZ-E003` OkFile: check `OKFILE_TOKEN`, network access, quota, and cached URL age; rerun the same command.
 - `VTZ-E004` Alibaba/Fun-ASR: check `DASHSCOPE_API_KEY`, `ALIYUN_WORKSPACE_ID`, `ALIYUN_REGION`, account balance, and service status; rerun the same command.
 - `VTZ-E005` AI segment contract or QA blocker: the AI runner must first repair `segments.txt` with `final_qa_prompt.txt` / `final_qa_report.md`, then rerun. Ask the user only if the same blocker remains after two AI repair attempts or the fix needs domain judgment.
 
@@ -143,7 +143,7 @@ User-facing trigger is natural language: the user can paste a local media path a
 Run:
 
 ```bash
-python scripts/video_to_subtitles.py "/absolute/path/to/video.mp4" --language en
+python scripts/video_to_subtitles.py "/absolute/path/to/video.mp4" --language en --confirm-external-processing
 ```
 
 If the user confirmed a custom subtitle export directory, add:
@@ -221,6 +221,7 @@ For another domain, use the same workflow but provide a new glossary and repair 
 ```bash
 python scripts/video_to_subtitles.py "/path/to/video.mp4" \
   --language en \
+  --confirm-external-processing \
   --domain-name "film subtitles" \
   --glossary references/film_glossary.md \
   --term-rules references/film_term_repair_rules.json \
