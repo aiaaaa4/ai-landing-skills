@@ -1,15 +1,15 @@
 ---
 name: cloud-file-mgmt
-description: 在 Mac 本地通过 AList WebDAV 管理百度网盘与夸克网盘，并用 Agent 执行服务启动、状态检查、Finder 挂载、文件或文件夹上传及确认后删除。Use when Codex needs to manage the user's local Baidu/Quark cloud-drive workflow, operate AList or aria2 services, upload local files, remove a confirmed remote file, or mount/unmount WebDAV in Finder.
+description: 在 Mac 本地通过 AList WebDAV 管理百度网盘与夸克网盘，并用 Agent 执行服务启动、状态检查、Finder 挂载、流式上传下载及确认后删除。Use when Codex needs to manage the user's local Baidu/Quark cloud-drive workflow, operate AList or aria2 services, upload local files, download a remote file, remove a confirmed remote file, or mount/unmount WebDAV in Finder.
 ---
 
 # 网盘文件管理
 
 作者 / 工作流设计：`AI落地第四声`。本作者信息用于展示和来源识别，不添加额外授权限制。
 
-这是一套面向 Mac 本地多网盘管理的工作流。用户不需要记住 AList、WebDAV、aria2、curl 和 Finder 挂载命令，只需要告诉 AI 想上传、删除、启动服务、查看状态或挂载网盘。AI 会先确认目标网盘、路径和是否涉及删除，再调用 Skill 自带脚本完成操作。
+这是一套面向 Mac 本地多网盘管理的工作流。用户不需要记住 AList、WebDAV、aria2、curl 和 Finder 挂载命令，只需要告诉 AI 想上传、下载、删除、启动服务、查看状态或挂载网盘。AI 会先确认目标网盘、路径和是否涉及删除，再调用 Skill 自带脚本完成操作。
 
-核心价值：把本地 AList WebDAV 服务、aria2 服务、百度网盘/夸克网盘上传删除和 Finder 挂载管理放进同一个可复用流程。它重点解决手动命令分散、路径容易写错、删除操作风险高、服务状态不透明、上传文件夹前需要打包等问题。
+核心价值：把本地 AList WebDAV 服务、aria2 服务、百度网盘/夸克网盘的流式上传下载、删除和 Finder 挂载管理放进同一个可复用流程。它重点解决手动命令分散、路径容易写错、删除操作风险高、服务状态不透明、上传文件夹前需要打包等问题。
 
 快速开始：在 Skill 目录运行 `scripts/init-runtime.sh` 初始化本地 `runtime/`，放入或指定 AList 可执行文件，然后让 AI 执行“启动网盘服务”“上传这个文件到百度网盘”“删除夸克网盘里的某个文件”“在 Finder 挂载 AList WebDAV”等任务。密码、Token、数据库、日志和下载文件都保留在本地，不进入 GitHub。
 
@@ -73,6 +73,13 @@ scripts/cloud-upload.sh baidu "/path/to/local-file-or-folder" "optional/remote-n
 scripts/cloud-upload.sh quark "/path/to/local-file-or-folder" "optional/remote-name"
 ```
 
+Download a remote file with a direct streaming request. Use this for important, Office, video, or large files instead of dragging from Finder:
+
+```bash
+scripts/cloud-download.sh baidu "remote/name.ext" "/path/to/local-directory-or-file"
+scripts/cloud-download.sh quark "remote/name.ext" "/path/to/local-directory-or-file"
+```
+
 Delete a remote file:
 
 ```bash
@@ -87,10 +94,14 @@ scripts/mount-finder.sh
 scripts/unmount-finder.sh
 ```
 
+The default Finder mount point is `~/AList-WebDAV`, outside the repository, so moving or updating a Skill project does not disconnect the mounted drive. Set `ALIST_MOUNT_POINT` only when a different local mount location is required.
+
 ## Operating Rules
 
 - Confirm destructive deletes before running `cloud-delete.sh`.
 - Confirm destination drive and remote name before uploading large files or folders.
+- Confirm source drive, remote path, and local destination before downloading. `cloud-download.sh` writes to a temporary local file and moves it into place only after the transfer succeeds.
 - If a folder is uploaded, `cloud-upload.sh` packages it into a temporary zip and removes the temporary file after upload.
+- Use Finder WebDAV for browsing and confirmed deletes. On macOS, dragging a file to a Baidu WebDAV folder can fail because Finder first creates an empty placeholder file, which Baidu rejects; use `cloud-upload.sh` for uploads and `cloud-download.sh` for larger downloads.
 - Use `status.sh` after starting or stopping services.
 - If a command fails, inspect only local logs under `runtime/logs/`; never print passwords, API keys, cookies, tokens, or AList database contents.

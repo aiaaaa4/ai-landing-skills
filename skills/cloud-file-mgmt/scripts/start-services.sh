@@ -7,7 +7,7 @@ ALIST_DATA="${ALIST_DATA:-$ROOT/runtime/alist-data}"
 ARIA2_BIN="${ARIA2_BIN:-/opt/homebrew/bin/aria2c}"
 ARIA2_CONF="${ARIA2_CONF:-$ROOT/runtime/aria2/aria2.conf}"
 
-if [[ ! -f "$ARIA2_CONF" ]]; then
+if [[ ! -f "$ARIA2_CONF" || ! -f "$ROOT/runtime/aria2/rpc-secret" ]]; then
   "$ROOT/scripts/init-runtime.sh"
 fi
 

@@ -9,8 +9,7 @@ ARIA2_CONF="${ARIA2_CONF:-$ROOT/runtime/aria2/aria2.conf}"
 
 stop_screen() {
   local name="$1"
-  if screen -ls | grep -q "[.]$name[[:space:]]"; then
-    screen -S "$name" -X quit
+  if screen -S "$name" -X quit 2>/dev/null; then
     echo "$name stopped"
   else
     echo "$name is not running"

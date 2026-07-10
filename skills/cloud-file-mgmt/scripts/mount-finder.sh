@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MOUNT_POINT="$ROOT/AList-WebDAV"
-WEBDAV_URL="http://127.0.0.1:5244/dav/"
+MOUNT_POINT="${ALIST_MOUNT_POINT:-$HOME/AList-WebDAV}"
+WEBDAV_URL="${ALIST_WEBDAV_URL:-http://127.0.0.1:5244/dav/}"
 
 mkdir -p "$MOUNT_POINT"
 
-if mount | grep -q " on $MOUNT_POINT "; then
+if mount | grep -Fq " on $MOUNT_POINT "; then
   echo "AList WebDAV is already mounted at: $MOUNT_POINT"
 else
   echo "Mounting AList WebDAV at: $MOUNT_POINT"

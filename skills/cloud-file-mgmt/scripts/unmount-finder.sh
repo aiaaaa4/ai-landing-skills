@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MOUNT_POINT="$ROOT/AList-WebDAV"
+MOUNT_POINT="${ALIST_MOUNT_POINT:-$HOME/AList-WebDAV}"
 
-if mount | grep -q " on $MOUNT_POINT "; then
+if mount | grep -Fq " on $MOUNT_POINT "; then
   umount "$MOUNT_POINT"
   echo "Unmounted: $MOUNT_POINT"
 else

@@ -47,12 +47,12 @@
 
 ### [网盘文件管理](skills/cloud-file-mgmt)
 
-**`aiaaaa4.cloud-file-mgmt` · v1.2.0 · [查看源码](skills/cloud-file-mgmt) · [ClawHub](https://clawhub.ai/aiaaaa4/cloud-file-mgmt)**
+**`aiaaaa4.cloud-file-mgmt` · v1.2.1 · [查看源码](skills/cloud-file-mgmt) · [ClawHub](https://clawhub.ai/aiaaaa4/cloud-file-mgmt)**
 
 把百度网盘、夸克网盘与 Mac 本地文件系统放进同一套 Agent 工作流。你可以在 Finder 中直接操作，也可以让 Agent 按路径、目标网盘和文件名完成服务启动、上传、删除和挂载，不必反复记忆 AList、WebDAV、`curl` 或终端命令。
 
 - 通过本地 AList WebDAV 管理百度网盘和夸克网盘；可启动/停止服务、检查运行状态、在 Finder 挂载或卸载 WebDAV。
-- Agent 可确认本地源路径与目标网盘后上传文件；上传文件夹时自动临时打包为 ZIP，并在完成后清理临时文件。
+- Agent 可确认本地源路径与目标网盘后流式上传或下载文件；上传文件夹时自动临时打包为 ZIP，并在完成后清理临时文件。重要 Office 文件、视频和大文件优先使用脚本，不依赖 Finder 拖拽。
 - 删除远程文件前必须再次确认，避免批量操作误删；账号密码、Token、数据库、日志和下载文件始终留在本机，不会被提交到 GitHub。
 - 内置 aria2 本地服务运行管理，为后续的直接链接下载和传输任务预留基础。**当前版本不会绕过百度网盘或其他平台的会员、版权、风控与带宽限制**；任何速度提升都取决于文件来源、账户权限与平台规则。
 
