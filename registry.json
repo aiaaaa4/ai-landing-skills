@@ -44,7 +44,7 @@
       "skill_id": "aiaaaa4.video-publish",
       "display_name": "极简视频封装",
       "path": "skills/video-publish",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-publish",

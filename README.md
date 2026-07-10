@@ -48,7 +48,7 @@
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.0 · [查看源码](skills/video-publish) · ClawHub 发布中**
+**`aiaaaa4.video-publish` · v1.0.1 · [查看源码](skills/video-publish) · ClawHub 发布中**
 
 为已经下载或翻译完成的本地视频快速生成发布版 MP4。它用 FFmpeg 烧录字幕、叠加动态或固定文字水印、添加 2-3 秒免责声明，并保留原始分辨率与音频。
 
