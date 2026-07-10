@@ -9,6 +9,10 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     uses: openclaw/clawhub/.github/workflows/skill-publish.yml@main
