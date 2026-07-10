@@ -1,6 +1,6 @@
 <div align="center">
   <h1 align="center">AI落地第四声</h1>
-  <p align="center">面向真实任务的 Agent Skills：下载、字幕翻译与多网盘文件管理。</p>
+  <p align="center">面向真实任务的 Agent Skills：下载、字幕翻译、视频封装与多网盘文件管理。</p>
   <p align="center">
     <a href="#skills">浏览 Skills</a> ·
     <a href="#install">安装</a> ·
@@ -37,7 +37,7 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.3.4 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.3.7 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，结合 AI 语义分段、术语修复和自动质检，输出中文字幕在上、原文在下的 ASS/SRT。
 
@@ -45,6 +45,16 @@
 - 固定生产链路：Fun-ASR 词级转写、`qwen-mt-plus` 翻译分段、术语修复和 QA。
 - 支持重要 PPT、图表、UI、代码或屏幕文字的上下文处理，并为长视频持续反馈进度。
 - [查看完整工作流说明](docs/video-translate/README.md)。
+
+### [极简视频封装](skills/video-publish)
+
+**`aiaaaa4.video-publish` · v1.0.0 · [查看源码](skills/video-publish) · ClawHub 发布中**
+
+为已经下载或翻译完成的本地视频快速生成发布版 MP4。它用 FFmpeg 烧录字幕、叠加动态或固定文字水印、添加 2-3 秒免责声明，并保留原始分辨率与音频。
+
+- 每次都会确认免责声明、字幕、水印文字、输出位置和覆盖行为；不会静默改写已有视频。
+- 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。
+- 默认优先使用 Mac 硬件 H.264 编码；缺少 FFmpeg 时只会在首次且获得明确同意后通过 Homebrew 安装。
 
 ### [网盘文件管理](skills/cloud-file-mgmt)
 
@@ -64,6 +74,7 @@
 ```bash
 clawhub install @aiaaaa4/video-download
 clawhub install @aiaaaa4/video-translate
+clawhub install @aiaaaa4/video-publish
 clawhub install @aiaaaa4/cloud-file-mgmt
 ```
 
@@ -80,6 +91,7 @@ npx skills add aiaaaa4/ai-landing-skills --list --full-depth
 ```bash
 npx skills add aiaaaa4/ai-landing-skills --skill video-download --full-depth
 npx skills add aiaaaa4/ai-landing-skills --skill video-translate --full-depth
+npx skills add aiaaaa4/ai-landing-skills --skill video-publish --full-depth
 npx skills add aiaaaa4/ai-landing-skills --skill cloud-file-mgmt --full-depth
 ```
 
@@ -111,6 +123,7 @@ ClawHub 独立版本更新 / skills.sh 直接读取 GitHub 最新源码
 skills/
   video-download/       # yt-dlp + FFmpeg 的受确认下载流程
   video-translate/      # 本地视频的高质量字幕翻译流程
+  video-publish/        # FFmpeg 的免责声明、水印与字幕封装流程
   cloud-file-mgmt/      # Mac + AList WebDAV 的多网盘管理流程
 docs/                   # 面向人的产品与发布说明
 tests/                  # 可重复运行的回归测试

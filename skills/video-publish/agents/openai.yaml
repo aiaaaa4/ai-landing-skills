@@ -1,0 +1,6 @@
+interface:
+  display_name: "极简视频封装"
+  short_description: "用 FFmpeg 快速完成免责声明、动态水印与字幕烧录。"
+  default_prompt: "使用 $video-publish 为我指定的本地视频确认免责声明、字幕、水印、输出和画质设置后快速封装。"
+policy:
+  allow_implicit_invocation: false

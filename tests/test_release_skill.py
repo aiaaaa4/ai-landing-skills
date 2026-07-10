@@ -16,9 +16,9 @@ class ReleaseSkillTests(unittest.TestCase):
     def setUp(self) -> None:
         self.registry, self.repository = release_skill.load_registry()
 
-    def test_registry_exposes_three_public_skills(self) -> None:
+    def test_registry_exposes_all_public_skills(self) -> None:
         slugs = {item["slug"] for item in self.registry["items"]}
-        self.assertEqual(slugs, {"video-download", "video-translate", "cloud-file-mgmt"})
+        self.assertEqual(slugs, {"video-download", "video-translate", "video-publish", "cloud-file-mgmt"})
 
     def test_publish_command_uses_registry_metadata(self) -> None:
         item = release_skill.select_skill(self.registry, "video-download")

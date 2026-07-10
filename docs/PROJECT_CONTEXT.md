@@ -13,7 +13,7 @@
 
 | 项目 | 可见性 | 用途 | 可信来源 |
 | --- | --- | --- | --- |
-| `ai-landing-skills` | 公开 | 三个可独立安装和发布的 Agent Skill | `skills/<slug>/` 与 `registry.json` |
+| `ai-landing-skills` | 公开 | 四个可独立安装和发布的 Agent Skill | `skills/<slug>/` 与 `registry.json` |
 | `rithmic-signup` | 私有 | Rithmic 注册助手 App | 私有 GitHub 仓库 |
 | 本地网盘运行时 | 仅本机 | AList、aria2、数据库、日志与下载文件 | 忽略的本地 `runtime/` 目录 |
 
@@ -25,6 +25,7 @@
 | --- | --- | --- |
 | `aiaaaa4.video-download` | 一键加速视频下载 | `skills/video-download` |
 | `aiaaaa4.video-translate` | 人工级视频字幕翻译 | `skills/video-translate` |
+| `aiaaaa4.video-publish` | 极简视频封装 | `skills/video-publish` |
 | `aiaaaa4.cloud-file-mgmt` | 网盘文件管理 | `skills/cloud-file-mgmt` |
 
 `registry.json` 是 ID、展示名称、路径、版本、ClawHub 包名和主题标签的唯一来源。不要在多个文件里手工维护另一份版本号。
@@ -37,6 +38,7 @@
 - Finder 适合浏览和确认后删除。百度网盘可能拒绝 Finder 拖拽时创建的空临时文件；上传、下载 Office 文件、视频或大文件优先由 Agent 调用 `cloud-upload.sh` 与 `cloud-download.sh`。
 - 视频下载后若继续翻译字幕，先在用户指定位置创建 `<中文视频名> [<视频 ID>]` 媒体项目文件夹。视频、直接下载的音频、ASS/SRT 都放在项目根目录；中间文件放在隐藏 `.work/`，不散落在桌面或 Skill 源码目录。
 - 字幕翻译优先复用同名的音频下载文件；只有没有可复用音频时才用 FFmpeg 从视频提取上传音频。
+- 视频发布封装只处理用户明确给出的本地视频、字幕和输出路径。每次都确认免责声明、水印、字幕烧录、裁切、编码质量和覆盖行为；除首次经同意安装 FFmpeg 外，不访问网络或云端服务。
 
 ## 版本规则
 
