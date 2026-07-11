@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import shutil
 import subprocess
 import tempfile
@@ -15,15 +14,11 @@ DEFAULT_DISCLAIMER = Path(__file__).resolve().parents[1] / "assets" / "disclaime
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Prepend a cover and disclaimer while stream-copying the source video body.")
+    parser = argparse.ArgumentParser(description="Prepend a disclaimer while stream-copying the source video body.")
     parser.add_argument("input", type=Path, help="Source MP4 video.")
-    parser.add_argument("--cover-image", type=Path, required=True, help="Selected cover image.")
     parser.add_argument("--disclaimer-image", type=Path, default=DEFAULT_DISCLAIMER, help="Disclaimer image, defaults to the bundled asset.")
     parser.add_argument("--output", type=Path, required=True, help="Output MP4 path.")
-    cover_duration = parser.add_mutually_exclusive_group()
-    cover_duration.add_argument("--cover-frames", type=int, default=None, help="Cover duration in source-video frames, default 3 frames.")
-    cover_duration.add_argument("--cover-seconds", type=float, default=None, help="Optional cover duration in seconds, rounded up to a whole frame.")
-    parser.add_argument("--disclaimer-seconds", type=float, default=2.0, help="Disclaimer duration, default 2 seconds.")
+    parser.add_argument("--disclaimer-seconds", type=float, default=3.0, help="Disclaimer duration, default 3 seconds.")
     parser.add_argument("--preview-content-seconds", type=float, default=None, help="Copy only this many seconds of source content for a preview.")
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing output file.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without writing output.")
@@ -73,9 +68,8 @@ def probe_media(ffprobe: str, source: Path) -> dict[str, object]:
     return {"video": video, "audio": audio}
 
 
-def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
+def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     source = resolve_file(args.input, "Source video")
-    cover = resolve_file(args.cover_image, "Cover image")
     disclaimer = resolve_file(args.disclaimer_image, "Disclaimer image")
     output = args.output.expanduser().resolve()
     if source == output:
@@ -84,33 +78,18 @@ def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
         raise RuntimeError("Output must use the .mp4 extension.")
     if output.exists() and not args.overwrite:
         raise RuntimeError("Output already exists. Confirm replacement, then add --overwrite.")
-    if args.cover_frames is not None and not 1 <= args.cover_frames <= 250:
-        raise RuntimeError("--cover-frames must be between 1 and 250.")
-    if args.cover_seconds is not None and not 0 < args.cover_seconds <= 10:
-        raise RuntimeError("--cover-seconds must be greater than zero and at most 10 seconds.")
     if not 0.5 <= args.disclaimer_seconds <= 10:
         raise RuntimeError("--disclaimer-seconds must be between 0.5 and 10 seconds.")
     if args.preview_content_seconds is not None and args.preview_content_seconds <= 0:
         raise RuntimeError("--preview-content-seconds must be greater than zero.")
-    return source, cover, disclaimer, output
-
-
-def resolve_cover_duration(args: argparse.Namespace, media: dict[str, object]) -> tuple[int, float]:
-    fps = float(Fraction(str(media["video"]["r_frame_rate"])))
-    if args.cover_seconds is not None:
-        frames = max(1, math.ceil(args.cover_seconds * fps))
-    else:
-        frames = args.cover_frames or 3
-    return frames, frames / fps
+    return source, disclaimer, output
 
 
 def build_intro_command(
     ffmpeg: str,
-    cover: Path,
     disclaimer: Path,
     intro: Path,
     media: dict[str, object],
-    cover_seconds: float,
     disclaimer_seconds: float,
 ) -> list[str]:
     video = media["video"]
@@ -123,7 +102,7 @@ def build_intro_command(
     channels = int(audio.get("channels", 2)) if audio else 2
     channel_layout = str(audio.get("channel_layout") or ("mono" if channels == 1 else "stereo")) if audio else "stereo"
     audio_bitrate = int(audio.get("bit_rate") or 128_000) if audio else 128_000
-    intro_seconds = cover_seconds + disclaimer_seconds
+    intro_seconds = disclaimer_seconds
     gop = max(1, round(fps))
     scale = (
         f"scale={width}:{height}:force_original_aspect_ratio=decrease:out_range=tv,"
@@ -139,14 +118,6 @@ def build_intro_command(
         "-framerate",
         frame_rate,
         "-t",
-        f"{cover_seconds:g}",
-        "-i",
-        str(cover),
-        "-loop",
-        "1",
-        "-framerate",
-        frame_rate,
-        "-t",
         f"{disclaimer_seconds:g}",
         "-i",
         str(disclaimer),
@@ -156,12 +127,12 @@ def build_intro_command(
         f"{intro_seconds:g}",
         "-i",
         f"anullsrc=r={sample_rate}:cl={channel_layout}",
-        "-filter_complex",
-        f"[0:v]{scale},setpts=PTS-STARTPTS[v0];[1:v]{scale},setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[v]",
+        "-vf",
+        scale,
         "-map",
-        "[v]",
+        "0:v:0",
         "-map",
-        "2:a:0",
+        "1:a:0",
         "-t",
         f"{intro_seconds:g}",
         "-c:v",
@@ -296,16 +267,15 @@ def stream_transport_concat(intro: Path, source_command: list[str], mux_command:
 
 def main() -> int:
     args = parse_args()
-    source, cover, disclaimer, output = validate_args(args)
+    source, disclaimer, output = validate_args(args)
     ffmpeg, ffprobe = require_tools()
     media = probe_media(ffprobe, source)
-    cover_frames, cover_seconds = resolve_cover_duration(args, media)
     output.parent.mkdir(parents=True, exist_ok=True)
-    intro_seconds = cover_seconds + args.disclaimer_seconds
+    intro_seconds = args.disclaimer_seconds
     with tempfile.TemporaryDirectory(prefix="video-publish-intro-") as temp_dir:
         temp_path = Path(temp_dir)
         intro = temp_path / "intro.ts"
-        intro_command = build_intro_command(ffmpeg, cover, disclaimer, intro, media, cover_seconds, args.disclaimer_seconds)
+        intro_command = build_intro_command(ffmpeg, disclaimer, intro, media, args.disclaimer_seconds)
         source_command = build_source_transport_command(ffmpeg, source, media, intro_seconds, args.preview_content_seconds)
         mux_command = build_mux_command(ffmpeg, output, args.overwrite)
         if args.dry_run:
@@ -323,10 +293,7 @@ def main() -> int:
         json.dumps(
             {
                 "output": str(output),
-                "cover_image": str(cover),
                 "disclaimer_image": str(disclaimer),
-                "cover_frames": cover_frames,
-                "cover_seconds": cover_seconds,
                 "disclaimer_seconds": args.disclaimer_seconds,
                 "source_video_reencoded": False,
                 "size_bytes": output.stat().st_size,

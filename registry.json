@@ -18,7 +18,7 @@
       "skill_id": "aiaaaa4.video-download",
       "display_name": "一键加速视频下载",
       "path": "skills/video-download",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-download",
@@ -44,7 +44,7 @@
       "skill_id": "aiaaaa4.video-publish",
       "display_name": "极简视频封装",
       "path": "skills/video-publish",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-publish",

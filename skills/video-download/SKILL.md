@@ -1,6 +1,6 @@
 ---
 name: video-download
-description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视频/音频，覆盖 YouTube、Shorts、Vimeo、TikTok、Instagram、Bilibili 等 yt-dlp 支持的来源。Use when Codex is asked to inspect available video qualities, choose resolution/container/codec, download a permitted video or playlist, extract audio, merge streams, or save a media URL; list formats and confirm quality, output path, and filename before downloading.
+description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视频/音频及最高质量原始封面，覆盖 YouTube、Shorts、Vimeo、TikTok、Instagram、Bilibili 等 yt-dlp 支持的来源。Use when Codex is asked to inspect available video qualities, choose resolution/container/codec, download a permitted video or playlist, save the best available source thumbnail as PNG, extract audio, merge streams, or save a media URL; list formats and confirm quality, output path, and filename before downloading.
 ---
 
 # 一键加速视频下载
@@ -11,7 +11,7 @@ description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视
 
 核心价值：避免拿到链接就直接下载，减少下错清晰度、下错容器、文件名混乱、HDR/编码不兼容、输出位置不清楚等问题。默认适用于 YouTube、YouTube Shorts、Vimeo、TikTok、Instagram、X/Twitter、Facebook、Twitch、Bilibili、Dailymotion、SoundCloud、Bandcamp、Reddit 及其他 `yt-dlp` 支持的来源；完整范围以 [yt-dlp 官方站点清单](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) 为准。播放列表只在用户明确要求时处理。
 
-快速开始：把视频链接发给 AI，并说明你想要“最高画质”“MP4 兼容”“小文件”“只要音频”或让 AI 推荐。默认推荐最高可用画质，而不是为了省空间主动降到 720p。下载若会继续做字幕翻译，AI 会在你指定的位置建立一个以中文视频名和视频 ID 命名的小工程文件夹；视频、音频和字幕都放在这里。`yt-dlp` 负责解析和下载；`ffmpeg` 负责把分离的视频与音频合并、转换容器、提取音频，以及需要时处理字幕、封面和元数据。
+快速开始：把视频链接发给 AI，并说明你想要“最高画质”“MP4 兼容”“小文件”“只要音频”或让 AI 推荐。默认推荐最高可用画质，而不是为了省空间主动降到 720p。下载时同时保存平台提供的最高质量作者封面并转为 `原始封面.png`。下载若会继续做字幕翻译，AI 会在你指定的位置建立一个以中文视频名和视频 ID 命名的小工程文件夹；视频、音频、字幕和封面都放在这里。`yt-dlp` 负责解析和下载；`ffmpeg` 负责合并音视频、转换容器、提取音频和转换封面格式。
 
 效果示例：
 
@@ -57,6 +57,7 @@ Mention format IDs or selectors, resolution, FPS, HDR/SDR, video codec, audio co
    - Treat every download that may continue to subtitle translation as one media project, not a loose collection of files.
    - Use the confirmed location as `PARENT_DIR`, then create `PROJECT_DIR` named `<localized video title> [<video id>]` beneath it. Localize the title to the user's requested language when asked.
    - Save the video, an explicitly downloaded audio-only file, ASS/SRT outputs, and hidden working artifacts under `PROJECT_DIR`. Do not leave related files in the parent directory.
+   - Save only the best available platform thumbnail, convert it to PNG, and name it `原始封面.png` under `PROJECT_DIR`. Use `--write-thumbnail`, not `--write-all-thumbnails`.
    - Pass the same `PROJECT_DIR` to video translation as both its `--outputs-dir` and the parent of its hidden `.work/` directory.
 
 6. Confirm the filename.
@@ -77,9 +78,11 @@ Use explicit reviewed IDs when possible:
 
 ```bash
 yt-dlp --no-playlist --windows-filenames \
+  --write-thumbnail --convert-thumbnails png \
   -f "VIDEO_ID+AUDIO_ID" \
   --merge-output-format mkv \
   -P "OUTPUT_DIR" \
+  -o "thumbnail:原始封面.%(ext)s" \
   -o "OUTPUT_NAME" \
   "VIDEO_URL"
 ```
@@ -88,9 +91,11 @@ Use best quality after the user delegates selection:
 
 ```bash
 yt-dlp --no-playlist --windows-filenames \
+  --write-thumbnail --convert-thumbnails png \
   -f "bv*+ba/b" \
   --merge-output-format mkv \
   -P "OUTPUT_DIR" \
+  -o "thumbnail:原始封面.%(ext)s" \
   -o "OUTPUT_NAME" \
   "VIDEO_URL"
 ```
@@ -99,9 +104,11 @@ Use MP4 compatibility after confirmation:
 
 ```bash
 yt-dlp --no-playlist --windows-filenames \
+  --write-thumbnail --convert-thumbnails png \
   -f "bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/b" \
   --merge-output-format mp4 \
   -P "OUTPUT_DIR" \
+  -o "thumbnail:原始封面.%(ext)s" \
   -o "OUTPUT_NAME" \
   "VIDEO_URL"
 ```
@@ -110,14 +117,16 @@ Use audio only after confirmation:
 
 ```bash
 yt-dlp --no-playlist --windows-filenames \
+  --write-thumbnail --convert-thumbnails png \
   -f "ba" \
   -P "OUTPUT_DIR" \
+  -o "thumbnail:原始封面.%(ext)s" \
   -o "OUTPUT_NAME" \
   "VIDEO_URL"
 ```
 
 ## Final Response
 
-After downloading, report the saved path, file size, selected format IDs or selector, confirmed output directory, confirmed filename, and any important caveats such as HDR, MKV playback, subtitles, or audio language.
+After downloading, report the saved media path, `原始封面.png` path, file size, selected format IDs or selector, confirmed output directory, confirmed filename, and any important caveats such as HDR, MKV playback, subtitles, or audio language. If the platform exposes no thumbnail, report that clearly instead of substituting a video frame.
 
 Remind the user to download only content they have permission to save or use when relevant.

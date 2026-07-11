@@ -24,12 +24,13 @@
 
 ### [一键加速视频下载](skills/video-download)
 
-**`aiaaaa4.video-download` · v1.2.1 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
+**`aiaaaa4.video-download` · v1.2.2 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
 
 把一个视频链接交给 Agent，先看清可下载的画质、编码、大小和容器，再决定下载。适合希望保留选择权、又不想手动研究 `yt-dlp` 参数的人。
 
 - 支持 YouTube、YouTube Shorts、Vimeo、TikTok、Instagram、X/Twitter、Facebook、Twitch、Bilibili、Dailymotion、SoundCloud、Bandcamp、Reddit 等常见来源，以及 [yt-dlp 官方列出的完整站点清单](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)。yt-dlp 的官方定义是支持数千个站点，因此以该清单为准，而不是维护一份很快过期的静态列表。
 - 下载前由 Agent 检查可用格式，并按最高质量、MP4 兼容、较小体积、仅音频等目标给出可理解的选项。
+- 下载媒体时同时保存平台提供的最高质量作者封面，统一转换并命名为 `原始封面.png`；不会额外下载一组不同尺寸。
 - 可选择分辨率、帧率、HDR/SDR、编码、音轨和输出文件名；默认不把播放列表当作单个视频误下载。
 - 基于 `yt-dlp` 下载，使用 [FFmpeg](https://ffmpeg.org/ffmpeg.html) 完成音视频合并、容器转换、提取音频、嵌入字幕/封面等后处理。FFmpeg 是通用媒体转换工具，能读取、过滤与转码多种音视频格式。
 
@@ -48,11 +49,11 @@
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.3 · [查看源码](skills/video-publish) · ClawHub 发布中**
+**`aiaaaa4.video-publish` · v1.0.4 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
 
-为已经下载或翻译完成的本地视频快速生成发布版 MP4。它从视频前半段抽取封面候选，将选定封面和固定免责声明作为短片头无损拼接到原视频，默认不重新编码视频主体。
+为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，并在视频开头轻量添加 3 秒固定免责声明，默认不重新编码视频主体。
 
-- 默认生成 `3` 帧封面与 `2` 秒免责声明；字幕烧录、水印和其他完整重编码功能保留为高级模式。
+- 封面保存为 `抽帧封面1.png` 至 `抽帧封面5.png`，不再拼进视频；字幕烧录、水印和其他完整重编码功能保留为高级模式。
 - 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。
 - 默认优先使用 Mac 硬件 H.264 编码；缺少 FFmpeg 时只会在首次且获得明确同意后通过 Homebrew 安装。
 
@@ -123,7 +124,7 @@ ClawHub 独立版本更新 / skills.sh 直接读取 GitHub 最新源码
 skills/
   video-download/       # yt-dlp + FFmpeg 的受确认下载流程
   video-translate/      # 本地视频的高质量字幕翻译流程
-  video-publish/        # FFmpeg 的抽帧封面与免责声明轻量拼接流程
+  video-publish/        # FFmpeg 的独立抽帧封面与 3 秒免责声明流程
   cloud-file-mgmt/      # Mac + AList WebDAV 的多网盘管理流程
 docs/                   # 面向人的产品与发布说明
 tests/                  # 可重复运行的回归测试
