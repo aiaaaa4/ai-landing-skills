@@ -48,11 +48,11 @@
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.1 · [查看源码](skills/video-publish) · ClawHub 发布中**
+**`aiaaaa4.video-publish` · v1.0.2 · [查看源码](skills/video-publish) · ClawHub 发布中**
 
-为已经下载或翻译完成的本地视频快速生成发布版 MP4。它用 FFmpeg 烧录字幕、叠加动态或固定文字水印、添加 2-3 秒免责声明，并保留原始分辨率与音频。
+为已经下载或翻译完成的本地视频快速生成发布版 MP4。它从视频前半段抽取封面候选，将选定封面和固定免责声明作为短片头无损拼接到原视频，默认不重新编码视频主体。
 
-- 每次都会确认免责声明、字幕、水印文字、输出位置和覆盖行为；不会静默改写已有视频。
+- 默认生成 `1.5` 秒封面与 `2` 秒免责声明；字幕烧录、水印和其他完整重编码功能保留为高级模式。
 - 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。
 - 默认优先使用 Mac 硬件 H.264 编码；缺少 FFmpeg 时只会在首次且获得明确同意后通过 Homebrew 安装。
 
@@ -123,7 +123,7 @@ ClawHub 独立版本更新 / skills.sh 直接读取 GitHub 最新源码
 skills/
   video-download/       # yt-dlp + FFmpeg 的受确认下载流程
   video-translate/      # 本地视频的高质量字幕翻译流程
-  video-publish/        # FFmpeg 的免责声明、水印与字幕封装流程
+  video-publish/        # FFmpeg 的抽帧封面与免责声明轻量拼接流程
   cloud-file-mgmt/      # Mac + AList WebDAV 的多网盘管理流程
 docs/                   # 面向人的产品与发布说明
 tests/                  # 可重复运行的回归测试

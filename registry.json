@@ -44,11 +44,11 @@
       "skill_id": "aiaaaa4.video-publish",
       "display_name": "极简视频封装",
       "path": "skills/video-publish",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "platforms": ["github", "clawhub", "skills.sh", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-publish",
-        "topics": ["video", "ffmpeg", "watermark", "subtitle", "aiaaaa4"]
+        "topics": ["video", "ffmpeg", "cover", "disclaimer", "aiaaaa4"]
       }
     },
     {
