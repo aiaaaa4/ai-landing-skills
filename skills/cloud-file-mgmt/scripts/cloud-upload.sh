@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 <baidu|quark> <local-file-or-folder> [remote-name-or-path]" >&2
+  echo "Usage: $0 <alist-mount-name> <local-file-or-folder> [remote-name-or-path]" >&2
 }
 
 if [[ $# -lt 2 || $# -gt 3 ]]; then
@@ -10,16 +10,17 @@ if [[ $# -lt 2 || $# -gt 3 ]]; then
   exit 2
 fi
 
-DRIVE="$1"
+MOUNT_NAME="$1"
 SOURCE="$2"
 REMOTE_NAME="${3:-}"
 BASE_URL="http://127.0.0.1:5244/dav"
 
-case "$DRIVE" in
-  baidu|quark) ;;
-  *)
-    echo "Drive must be baidu or quark." >&2
+case "$MOUNT_NAME" in
+  ""|.|..|*/*)
+    echo "AList mount name must be one non-empty top-level mount name without '/'." >&2
     exit 2
+    ;;
+  *)
     ;;
 esac
 
@@ -51,25 +52,25 @@ if [[ -z "${ALIST_PASSWORD:-}" ]]; then
   echo
 fi
 
-URL_PATH="$(python3 - "$DRIVE" "$REMOTE_NAME" <<'PY'
+URL_PATH="$(python3 - "$MOUNT_NAME" "$REMOTE_NAME" <<'PY'
 import sys
 from urllib.parse import quote
 
-drive, remote = sys.argv[1], sys.argv[2].strip("/")
+mount_name, remote = sys.argv[1], sys.argv[2].strip("/")
 parts = [quote(part) for part in remote.split("/") if part]
-print("/".join([quote(drive)] + parts))
+print("/".join([quote(mount_name)] + parts))
 PY
 )"
 
 URL="$BASE_URL/$URL_PATH"
 SIZE="$(wc -c < "$UPLOAD_PATH" | tr -d ' ')"
 
-echo "Uploading $UPLOAD_PATH ($SIZE bytes) -> /$DRIVE/$REMOTE_NAME"
+echo "Uploading $UPLOAD_PATH ($SIZE bytes) -> /$MOUNT_NAME/$REMOTE_NAME"
 curl --fail-with-body --silent --show-error \
   --user "admin:${ALIST_PASSWORD}" \
   --upload-file "$UPLOAD_PATH" \
   "$URL" >/dev/null
-echo "Uploaded: /$DRIVE/$REMOTE_NAME"
+echo "Uploaded: /$MOUNT_NAME/$REMOTE_NAME"
 
 if [[ -n "$CLEANUP_PATH" ]]; then
   rm -f "$CLEANUP_PATH"

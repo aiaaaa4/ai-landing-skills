@@ -96,7 +96,10 @@ def validate_registry() -> list[dict]:
             clawhub = item.get("clawhub")
             if not isinstance(clawhub, dict):
                 fail(f"registry clawhub metadata must be an object for {slug}")
-            if clawhub.get("package") != f"@aiaaaa4/{slug}":
+            publish_slug = clawhub.get("slug", slug)
+            if not isinstance(publish_slug, str) or not publish_slug:
+                fail(f"registry ClawHub slug is invalid for {slug}")
+            if clawhub.get("package") != f"@aiaaaa4/{publish_slug}":
                 fail(f"registry ClawHub package is invalid for {slug}")
             topics = clawhub.get("topics")
             if not isinstance(topics, list) or not all(isinstance(topic, str) and topic for topic in topics):

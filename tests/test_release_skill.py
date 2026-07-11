@@ -28,6 +28,12 @@ class ReleaseSkillTests(unittest.TestCase):
         self.assertIn("video,download,yt-dlp,aiaaaa4", command)
         self.assertIn("--dry-run", command)
 
+    def test_publish_command_supports_platform_slug_alias(self) -> None:
+        item = release_skill.select_skill(self.registry, "video-translate")
+        command = release_skill.publish_command(item, self.repository, "Alias release", dry_run=True)
+        slug_index = command.index("--slug") + 1
+        self.assertEqual(command[slug_index], "aiaaaa4-video-translate")
+
 
 if __name__ == "__main__":
     unittest.main()
