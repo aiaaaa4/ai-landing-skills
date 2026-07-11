@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import shutil
 import subprocess
 import tempfile
@@ -19,7 +20,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cover-image", type=Path, required=True, help="Selected cover image.")
     parser.add_argument("--disclaimer-image", type=Path, default=DEFAULT_DISCLAIMER, help="Disclaimer image, defaults to the bundled asset.")
     parser.add_argument("--output", type=Path, required=True, help="Output MP4 path.")
-    parser.add_argument("--cover-seconds", type=float, default=1.5, help="Cover duration, default 1.5 seconds.")
+    cover_duration = parser.add_mutually_exclusive_group()
+    cover_duration.add_argument("--cover-frames", type=int, default=None, help="Cover duration in source-video frames, default 3 frames.")
+    cover_duration.add_argument("--cover-seconds", type=float, default=None, help="Optional cover duration in seconds, rounded up to a whole frame.")
     parser.add_argument("--disclaimer-seconds", type=float, default=2.0, help="Disclaimer duration, default 2 seconds.")
     parser.add_argument("--preview-content-seconds", type=float, default=None, help="Copy only this many seconds of source content for a preview.")
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing output file.")
@@ -81,8 +84,10 @@ def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
         raise RuntimeError("Output must use the .mp4 extension.")
     if output.exists() and not args.overwrite:
         raise RuntimeError("Output already exists. Confirm replacement, then add --overwrite.")
-    if not 0.25 <= args.cover_seconds <= 10:
-        raise RuntimeError("--cover-seconds must be between 0.25 and 10 seconds.")
+    if args.cover_frames is not None and not 1 <= args.cover_frames <= 250:
+        raise RuntimeError("--cover-frames must be between 1 and 250.")
+    if args.cover_seconds is not None and not 0 < args.cover_seconds <= 10:
+        raise RuntimeError("--cover-seconds must be greater than zero and at most 10 seconds.")
     if not 0.5 <= args.disclaimer_seconds <= 10:
         raise RuntimeError("--disclaimer-seconds must be between 0.5 and 10 seconds.")
     if args.preview_content_seconds is not None and args.preview_content_seconds <= 0:
@@ -90,8 +95,13 @@ def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path]:
     return source, cover, disclaimer, output
 
 
-def concat_quote(path: Path) -> str:
-    return str(path).replace("'", "'\\''")
+def resolve_cover_duration(args: argparse.Namespace, media: dict[str, object]) -> tuple[int, float]:
+    fps = float(Fraction(str(media["video"]["r_frame_rate"])))
+    if args.cover_seconds is not None:
+        frames = max(1, math.ceil(args.cover_seconds * fps))
+    else:
+        frames = args.cover_frames or 3
+    return frames, frames / fps
 
 
 def build_intro_command(
@@ -114,7 +124,7 @@ def build_intro_command(
     channel_layout = str(audio.get("channel_layout") or ("mono" if channels == 1 else "stereo")) if audio else "stereo"
     audio_bitrate = int(audio.get("bit_rate") or 128_000) if audio else 128_000
     intro_seconds = cover_seconds + disclaimer_seconds
-    gop = max(1, round(fps * 2))
+    gop = max(1, round(fps))
     scale = (
         f"scale={width}:{height}:force_original_aspect_ratio=decrease:out_range=tv,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p,"
@@ -158,8 +168,8 @@ def build_intro_command(
         "libx264",
         "-preset",
         "veryfast",
-        "-crf",
-        "18",
+        "-qp",
+        "26",
         "-profile:v",
         "high",
         "-level:v",
@@ -182,6 +192,8 @@ def build_intro_command(
         str(gop),
         "-sc_threshold",
         "0",
+        "-x264-params",
+        f"ref=3:b-pyramid=none:keyint={gop}:min-keyint={gop}:scenecut=0:chroma-qp-offset=0",
         "-c:a",
         "aac",
         "-b:a",
@@ -191,25 +203,95 @@ def build_intro_command(
         "-ac",
         str(channels),
     ]
-    time_base = str(video.get("time_base") or "1/90000")
-    denominator = Fraction(time_base).denominator
-    command.extend(["-video_track_timescale", str(denominator), "-movflags", "+faststart", str(intro)])
+    command.extend(["-mpegts_flags", "+initial_discontinuity", "-f", "mpegts", str(intro)])
     return command
 
 
-def build_concat_command(
+def build_source_transport_command(
     ffmpeg: str,
-    concat_file: Path,
-    output: Path,
+    source: Path,
+    media: dict[str, object],
     intro_seconds: float,
     preview_content_seconds: float | None,
-    overwrite: bool,
 ) -> list[str]:
-    command = [ffmpeg, "-hide_banner", "-y" if overwrite else "-n", "-f", "concat", "-safe", "0", "-i", str(concat_file)]
+    fps = float(Fraction(str(media["video"]["r_frame_rate"])))
+    # H.264 DTS can lead PTS by two frames. Offset the source beyond the intro
+    # so the remuxer receives strictly increasing timestamps at the boundary.
+    timestamp_offset = intro_seconds + (2 / fps) + (1 / 90_000)
+    command = [ffmpeg, "-hide_banner", "-i", str(source)]
     if preview_content_seconds is not None:
-        command.extend(["-t", f"{intro_seconds + preview_content_seconds:g}"])
-    command.extend(["-map", "0:v:0", "-map", "0:a?", "-c", "copy", "-movflags", "+faststart", str(output)])
+        command.extend(["-t", f"{preview_content_seconds:g}"])
+    command.extend(
+        [
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c",
+            "copy",
+            "-bsf:v",
+            "h264_mp4toannexb",
+            "-output_ts_offset",
+            f"{timestamp_offset:.9f}",
+            "-mpegts_flags",
+            "+initial_discontinuity",
+            "-f",
+            "mpegts",
+            "pipe:1",
+        ]
+    )
     return command
+
+
+def build_mux_command(ffmpeg: str, output: Path, overwrite: bool) -> list[str]:
+    return [
+        ffmpeg,
+        "-hide_banner",
+        "-y" if overwrite else "-n",
+        "-f",
+        "mpegts",
+        "-i",
+        "pipe:0",
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c",
+        "copy",
+        "-bsf:a",
+        "aac_adtstoasc",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
+
+
+def stream_transport_concat(intro: Path, source_command: list[str], mux_command: list[str]) -> None:
+    mux = subprocess.Popen(mux_command, stdin=subprocess.PIPE)
+    if mux.stdin is None:
+        raise RuntimeError("Could not open the final FFmpeg input pipe.")
+    source_process: subprocess.Popen[bytes] | None = None
+    try:
+        with intro.open("rb") as intro_file:
+            shutil.copyfileobj(intro_file, mux.stdin)
+        source_process = subprocess.Popen(source_command, stdout=subprocess.PIPE)
+        if source_process.stdout is None:
+            raise RuntimeError("Could not open the source FFmpeg output pipe.")
+        with source_process.stdout:
+            shutil.copyfileobj(source_process.stdout, mux.stdin)
+        source_result = source_process.wait()
+        mux.stdin.close()
+        mux_result = mux.wait()
+    except Exception:
+        if source_process and source_process.poll() is None:
+            source_process.terminate()
+        if mux.poll() is None:
+            mux.terminate()
+        raise
+    if source_result != 0:
+        raise RuntimeError(f"Source stream copy failed with exit code {source_result}.")
+    if mux_result != 0:
+        raise RuntimeError(f"Final MP4 mux failed with exit code {mux_result}.")
 
 
 def main() -> int:
@@ -217,27 +299,34 @@ def main() -> int:
     source, cover, disclaimer, output = validate_args(args)
     ffmpeg, ffprobe = require_tools()
     media = probe_media(ffprobe, source)
+    cover_frames, cover_seconds = resolve_cover_duration(args, media)
     output.parent.mkdir(parents=True, exist_ok=True)
-    intro_seconds = args.cover_seconds + args.disclaimer_seconds
+    intro_seconds = cover_seconds + args.disclaimer_seconds
     with tempfile.TemporaryDirectory(prefix="video-publish-intro-") as temp_dir:
         temp_path = Path(temp_dir)
-        intro = temp_path / "intro.mp4"
-        concat_file = temp_path / "concat.txt"
-        intro_command = build_intro_command(ffmpeg, cover, disclaimer, intro, media, args.cover_seconds, args.disclaimer_seconds)
-        concat_file.write_text(f"file '{concat_quote(intro)}'\nfile '{concat_quote(source)}'\n", encoding="utf-8")
-        concat_command = build_concat_command(ffmpeg, concat_file, output, intro_seconds, args.preview_content_seconds, args.overwrite)
+        intro = temp_path / "intro.ts"
+        intro_command = build_intro_command(ffmpeg, cover, disclaimer, intro, media, cover_seconds, args.disclaimer_seconds)
+        source_command = build_source_transport_command(ffmpeg, source, media, intro_seconds, args.preview_content_seconds)
+        mux_command = build_mux_command(ffmpeg, output, args.overwrite)
         if args.dry_run:
-            print(json.dumps({"intro_command": intro_command, "concat_command": concat_command}, ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    {"intro_command": intro_command, "source_command": source_command, "mux_command": mux_command},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
             return 0
         subprocess.run(intro_command, check=True)
-        subprocess.run(concat_command, check=True)
+        stream_transport_concat(intro, source_command, mux_command)
     print(
         json.dumps(
             {
                 "output": str(output),
                 "cover_image": str(cover),
                 "disclaimer_image": str(disclaimer),
-                "cover_seconds": args.cover_seconds,
+                "cover_frames": cover_frames,
+                "cover_seconds": cover_seconds,
                 "disclaimer_seconds": args.disclaimer_seconds,
                 "source_video_reencoded": False,
                 "size_bytes": output.stat().st_size,
