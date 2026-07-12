@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -91,7 +92,7 @@ def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path | No
     timeline_output = (
         args.timeline_output.expanduser().resolve()
         if args.timeline_output
-        else output.with_suffix(".timeline.json")
+        else output.parent / ".work" / "publish" / f"{output.stem}.timeline.json"
     )
     paths = [source, disclaimer, output, timeline_output]
     if subtitle:
@@ -127,7 +128,106 @@ def transport_offset_seconds(media: dict[str, object], intro_seconds: float) -> 
     return intro_seconds + (2 / fps) + (1 / 90_000)
 
 
-def probe_content_offset(ffprobe: str, intro: Path, output: Path, source: Path, intro_seconds: float) -> float:
+def decoded_frame_hashes(
+    ffmpeg: str,
+    path: Path,
+    selector: str,
+    seconds: float,
+) -> tuple[Fraction, list[tuple[int, str]]]:
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(path),
+            "-t",
+            f"{seconds:g}",
+            "-map",
+            f"0:{selector}:0",
+            "-f",
+            "framemd5",
+            "-",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    time_base_match = re.search(r"^#tb 0:\s*(\d+/\d+)", result.stdout, re.MULTILINE)
+    if not time_base_match:
+        raise RuntimeError(f"Could not read {selector} frame time base for subtitle alignment.")
+    frames: list[tuple[int, str]] = []
+    for line in result.stdout.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) >= 6:
+            frames.append((int(parts[2]), parts[5]))
+    return Fraction(time_base_match.group(1)), frames
+
+
+def match_decoded_stream_offset(
+    ffmpeg: str,
+    source: Path,
+    output: Path,
+    selector: str,
+    intro_seconds: float,
+) -> float:
+    source_time_base, source_frames = decoded_frame_hashes(ffmpeg, source, selector, 2)
+    output_time_base, output_frames = decoded_frame_hashes(ffmpeg, output, selector, intro_seconds + 4)
+    return find_frame_hash_offset(
+        source_time_base,
+        source_frames,
+        output_time_base,
+        output_frames,
+        selector,
+        intro_seconds,
+    )
+
+
+def find_frame_hash_offset(
+    source_time_base: Fraction,
+    source_frames: list[tuple[int, str]],
+    output_time_base: Fraction,
+    output_frames: list[tuple[int, str]],
+    selector: str,
+    intro_seconds: float,
+) -> float:
+    window = min(24, len(source_frames), len(output_frames))
+    if window < 8:
+        raise RuntimeError(f"Not enough decoded {selector} frames for subtitle alignment.")
+    for source_index in range(min(80, len(source_frames) - window + 1)):
+        source_hashes = [frame[1] for frame in source_frames[source_index : source_index + window]]
+        if selector == "a" and len(set(source_hashes)) < 4:
+            continue
+        for output_index in range(len(output_frames) - window + 1):
+            output_time = float(output_frames[output_index][0] * output_time_base)
+            if output_time < intro_seconds - 0.25:
+                continue
+            if [frame[1] for frame in output_frames[output_index : output_index + window]] != source_hashes:
+                continue
+            source_time = float(source_frames[source_index][0] * source_time_base)
+            offset = output_time - source_time
+            if offset >= intro_seconds - 0.25:
+                return offset
+    raise RuntimeError(f"Could not match decoded {selector} content across the publish boundary.")
+
+
+def probe_content_offset(
+    ffmpeg: str,
+    ffprobe: str,
+    intro: Path,
+    output: Path,
+    source: Path,
+    intro_seconds: float,
+    has_audio: bool,
+) -> tuple[float, str]:
+    if has_audio:
+        try:
+            return match_decoded_stream_offset(ffmpeg, source, output, "a", intro_seconds), "audio-frame-match"
+        except RuntimeError as error:
+            print(f"Audio alignment fallback: {error}", file=sys.stderr)
     count_result = subprocess.run(
         [
             ffprobe,
@@ -184,7 +284,7 @@ def probe_content_offset(ffprobe: str, intro: Path, output: Path, source: Path, 
     offset = output_timestamps[intro_frame_count] - source_timestamps[0]
     if offset < 0:
         raise RuntimeError("Detected a negative source-video offset; refusing to rewrite subtitles.")
-    return offset
+    return offset, "video-frame-boundary"
 
 
 def build_intro_command(
@@ -397,7 +497,15 @@ def main() -> int:
             return 0
         subprocess.run(intro_command, check=True)
         stream_transport_concat(intro, source_command, mux_command)
-        content_offset = probe_content_offset(ffprobe, intro, output, source, intro_seconds)
+        content_offset, offset_basis = probe_content_offset(
+            ffmpeg,
+            ffprobe,
+            intro,
+            output,
+            source,
+            intro_seconds,
+            media["audio"] is not None,
+        )
     if subtitle and subtitle_output:
         subtitle_output.parent.mkdir(parents=True, exist_ok=True)
         shift_srt_file(subtitle, subtitle_output, content_offset)
@@ -412,6 +520,7 @@ def main() -> int:
                 "packaged_subtitle": str(subtitle_output) if subtitle_output else None,
                 "disclaimer_seconds": args.disclaimer_seconds,
                 "content_offset_seconds": content_offset,
+                "offset_basis": offset_basis,
                 "source_video_reencoded": False,
             },
             ensure_ascii=False,
@@ -427,6 +536,7 @@ def main() -> int:
                 "disclaimer_image": str(disclaimer),
                 "disclaimer_seconds": args.disclaimer_seconds,
                 "content_offset_seconds": content_offset,
+                "offset_basis": offset_basis,
                 "subtitle_output": str(subtitle_output) if subtitle_output else None,
                 "timeline_output": str(timeline_output),
                 "source_video_reencoded": False,

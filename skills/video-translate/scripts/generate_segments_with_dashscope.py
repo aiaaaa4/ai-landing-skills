@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import time
@@ -9,9 +10,11 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from common import normalize_word
+from source_subtitle_reference import load_source_subtitle, references_by_asr_segment
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +51,7 @@ class SegmentChunk:
     key: str
     source_raw: str
     source_display: str
+    reference_used: bool = False
 
 
 TOKEN_RE = re.compile(r"[0-9]+(?:[:.,][0-9]+)*%?|[A-Za-zÀ-ÖØ-öø-ÿ]+(?:[’'][A-Za-zÀ-ÖØ-öø-ÿ]+)?")
@@ -73,6 +77,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--concurrency", type=int, default=1, help="Parallel DashScope translation batches. Production default is 1 because qwen-mt-plus is more stable in serial mode.")
     parser.add_argument("--heartbeat-seconds", type=int, default=60, help="Print progress at least this often while translating batches.")
     parser.add_argument("--screen-context", type=Path, default=None, help="Optional screen context file.")
+    parser.add_argument("--source-subtitle", type=Path, default=None, help="Optional original-language SRT/VTT used only to correct ASR display text.")
     parser.add_argument("--max-display-tokens", type=int, default=18)
     parser.add_argument("--max-retries", type=int, default=8, help="Retries per translation request, including rate-limit backoff.")
     parser.add_argument(
@@ -192,7 +197,72 @@ def chunk_segment(asr_index: int, text: str, raw_words: list[str], max_display_t
     return chunks
 
 
-def build_chunks(transcript: dict, max_display_tokens: int) -> list[SegmentChunk]:
+def boundary_map(reference_norms: list[str], raw_norms: list[str], boundary: int) -> int:
+    matcher = SequenceMatcher(None, reference_norms, raw_norms, autojunk=False)
+    anchors: list[tuple[int, int]] = [(0, 0), (len(reference_norms), len(raw_norms))]
+    for block in matcher.get_matching_blocks():
+        anchors.extend([(block.a, block.b), (block.a + block.size, block.b + block.size)])
+    anchors = sorted(set(anchors))
+    left = max((anchor for anchor in anchors if anchor[0] <= boundary), default=(0, 0))
+    right = min((anchor for anchor in anchors if anchor[0] >= boundary), default=(len(reference_norms), len(raw_norms)))
+    if right[0] == left[0]:
+        return max(0, min(len(raw_norms), left[1]))
+    ratio = (boundary - left[0]) / (right[0] - left[0])
+    mapped = round(left[1] + ratio * (right[1] - left[1]))
+    return max(0, min(len(raw_norms), mapped))
+
+
+def chunk_segment_with_reference(
+    asr_index: int,
+    reference_text: str,
+    raw_words: list[str],
+    max_display_tokens: int,
+) -> list[SegmentChunk] | None:
+    tokens = display_tokens(reference_text)
+    raw_norms = [token_norm(word) for word in raw_words if token_norm(word)]
+    reference_norms = [token.norm for token in tokens]
+    if not tokens or not raw_norms:
+        return None
+    similarity = SequenceMatcher(None, reference_norms, raw_norms, autojunk=False).ratio()
+    if similarity < 0.45:
+        return None
+
+    pieces = token_boundaries(reference_text, tokens, max_display_tokens)
+    while len(pieces) > len(raw_words) and len(pieces) > 1:
+        start, _end = pieces[-2]
+        _next_start, end = pieces[-1]
+        pieces[-2:] = [(start, end)]
+
+    reference_boundaries = [pieces[0][0], *[end for _start, end in pieces]]
+    raw_boundaries = [boundary_map(reference_norms, raw_norms, boundary) for boundary in reference_boundaries]
+    raw_boundaries[0] = 0
+    raw_boundaries[-1] = len(raw_words)
+    for index in range(1, len(raw_boundaries)):
+        raw_boundaries[index] = max(raw_boundaries[index], raw_boundaries[index - 1])
+
+    chunks: list[SegmentChunk] = []
+    for part_index, ((token_start, token_end), raw_start, raw_end) in enumerate(
+        zip(pieces, raw_boundaries, raw_boundaries[1:]),
+        start=1,
+    ):
+        if raw_end <= raw_start:
+            continue
+        display = reference_text[tokens[token_start].start : tokens[token_end - 1].end].strip(" ,;:")
+        raw = " ".join(raw_words[raw_start:raw_end]).strip()
+        if not display or not raw:
+            continue
+        digest = hashlib.sha1(display.encode("utf-8")).hexdigest()[:8]
+        chunks.append(SegmentChunk(f"S{asr_index:04d}_P{part_index:02d}_R{digest}", raw, display, True))
+    if not chunks or " ".join(chunk.source_raw for chunk in chunks).split() != raw_words:
+        return None
+    return chunks
+
+
+def build_chunks(
+    transcript: dict,
+    max_display_tokens: int,
+    source_references: dict[int, str] | None = None,
+) -> list[SegmentChunk]:
     chunks: list[SegmentChunk] = []
     for asr_index, segment in enumerate(transcript.get("segments", []), start=1):
         text = " ".join(str(segment.get("text") or "").split())
@@ -201,7 +271,13 @@ def build_chunks(transcript: dict, max_display_tokens: int) -> list[SegmentChunk
             for word in segment.get("words", [])
         ]
         raw_words = [word for word in raw_words if word]
-        chunks.extend(chunk_segment(asr_index, text, raw_words, max_display_tokens))
+        reference_text = (source_references or {}).get(asr_index - 1, "")
+        referenced = (
+            chunk_segment_with_reference(asr_index, reference_text, raw_words, max_display_tokens)
+            if reference_text
+            else None
+        )
+        chunks.extend(referenced or chunk_segment(asr_index, text, raw_words, max_display_tokens))
     return chunks
 
 
@@ -486,7 +562,16 @@ def main() -> int:
         print(f"Helper model: {model} (from {model_source})", flush=True)
 
     transcript = json.loads(args.transcript_words.read_text(encoding="utf-8"))
-    chunks = build_chunks(transcript, args.max_display_tokens)
+    source_references: dict[int, str] = {}
+    if args.source_subtitle:
+        cues = load_source_subtitle(args.source_subtitle)
+        source_references = references_by_asr_segment(transcript, cues)
+        print(
+            f"Source subtitle reference: {args.source_subtitle}; "
+            f"{len(cues)} cues mapped to {len(source_references)} ASR segments",
+            flush=True,
+        )
+    chunks = build_chunks(transcript, args.max_display_tokens, source_references)
     translations = load_cache(args.cache)
     print(f"Chunks: {len(chunks)}; cached translations: {len(translations)}", flush=True)
 
@@ -523,6 +608,13 @@ def main() -> int:
         "batch_size": args.batch_size,
         "concurrency": args.concurrency,
         "elapsed_seconds": round(time.monotonic() - started_at, 3),
+        "source_subtitle": str(args.source_subtitle) if args.source_subtitle else "",
+        "source_subtitle_sha256": (
+            hashlib.sha256(args.source_subtitle.read_bytes()).hexdigest()
+            if args.source_subtitle
+            else ""
+        ),
+        "reference_corrected_chunks": sum(1 for chunk in chunks if chunk.reference_used),
     }
     (args.out.parent / "segment_generation_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n",

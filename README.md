@@ -24,13 +24,14 @@
 
 ### [一键加速视频下载](skills/video-download)
 
-**`aiaaaa4.video-download` · v1.2.3 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
+**`aiaaaa4.video-download` · v1.2.4 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
 
 把一个视频链接交给 Agent，先看清可下载的画质、编码、大小和容器，再决定下载。适合希望保留选择权、又不想手动研究 `yt-dlp` 参数的人。
 
 - 支持 YouTube、YouTube Shorts、Vimeo、TikTok、Instagram、X/Twitter、Facebook、Twitch、Bilibili、Dailymotion、SoundCloud、Bandcamp、Reddit 等常见来源，以及 [yt-dlp 官方列出的完整站点清单](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)。yt-dlp 的官方定义是支持数千个站点，因此以该清单为准，而不是维护一份很快过期的静态列表。
 - 下载前由 Agent 检查可用格式，并按最高质量、MP4 兼容、较小体积、仅音频等目标给出可理解的选项。
 - 下载媒体时同时保存平台提供的最高质量作者封面，统一转换并命名为 `原始封面.png`；不会额外下载一组不同尺寸。
+- 进入三 Skill 组合流程时，额外把独立音频和一份最佳原语言字幕（如有）放入隐藏 `.work/input/`，供 Fun-ASR 与内容校正使用，翻译成功后自动清理。
 - 可选择分辨率、帧率、HDR/SDR、编码、音轨和输出文件名；默认不把播放列表当作单个视频误下载。
 - 基于 `yt-dlp` 下载，使用 [FFmpeg](https://ffmpeg.org/ffmpeg.html) 完成音视频合并、容器转换、提取音频、嵌入字幕/封面等后处理。FFmpeg 是通用媒体转换工具，能读取、过滤与转码多种音视频格式。
 
@@ -38,24 +39,30 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.3.9 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.4.0 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，结合 AI 语义分段、术语修复和自动质检，输出中文字幕在上、原文在下的 ASS/SRT。
 
 - 适合英语、法语、西班牙语、意大利语等本地视频翻译为中文。
-- 固定生产链路：Fun-ASR 词级转写、`qwen-mt-plus` 翻译分段、术语修复和 QA。
+- 固定生产链路：Fun-ASR 词级转写、`qwen-mt-plus` 翻译分段、术语修复和 QA。即使已有原字幕也仍执行 ASR；原字幕只校正识别内容，词级时间戳始终以 ASR 为准。
 - 支持重要 PPT、图表、UI、代码或屏幕文字的上下文处理，并为长视频持续反馈进度。
 - [查看完整工作流说明](docs/video-translate/README.md)。
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.6 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
+**`aiaaaa4.video-publish` · v1.0.7 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
 
-为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒固定免责声明，并可按成片正文的实际起点生成时间轴匹配的发布版 SRT；默认不重新编码视频主体。
+为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒固定免责声明，并优先通过音频内容匹配生成时间轴准确的发布版 SRT；默认不重新编码视频主体。
 
 - 封面保存为 `抽帧封面1.png` 至 `抽帧封面5.png`，不再拼进视频；字幕烧录、水印和其他完整重编码功能保留为高级模式。
 - 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。
-- 默认优先使用 Mac 硬件 H.264 编码；缺少 FFmpeg 时只会在首次且获得明确同意后通过 Homebrew 安装。
+- 缺少 FFmpeg 时会停止并提示用户自行安装可信版本；Skill 不调用 Homebrew、`sudo` 或其他包管理器。
+
+### 三 Skill 组合工作流
+
+`video-download → video-translate → video-publish` 共用一个媒体项目目录。下载阶段把独立音频和原语言字幕放进隐藏输入区；翻译阶段始终用 Fun-ASR 取得词级时间戳，并用原字幕校正内容，成功后删除临时音频和原字幕；发布阶段增加免责声明、抽取封面，并按实际语音偏移生成发布版 SRT。
+
+正常完成后的可见交付为：原版视频和发布版视频 `2` 个；双语 ASS、双语 SRT、发布版双语 SRT `3` 个；抽帧封面 `5` 张，加上平台提供的原始封面时共 `6` 张；独立音频和原语言字幕均为 `0`。运行记录与时间线清单保留在隐藏 `.work/`，不污染交付目录。
 
 ### [网盘文件管理](skills/cloud-file-mgmt)
 

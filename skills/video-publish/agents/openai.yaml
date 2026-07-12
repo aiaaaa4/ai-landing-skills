@@ -1,6 +1,6 @@
 interface:
   display_name: "极简视频封装"
-  short_description: "抽取 5 张投稿封面，轻量添加免责声明，并同步发布版字幕时间轴。"
-  default_prompt: "使用 $video-publish 从本地视频前半段随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒免责声明；若项目有匹配的 SRT，同时生成时间轴匹配的发布版字幕。"
+  short_description: "抽取 5 张投稿封面，轻量添加免责声明，并按实际语音偏移同步字幕。"
+  default_prompt: "使用 $video-publish 从本地视频前半段随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒免责声明；若项目有匹配的 SRT，通过音频内容匹配生成时间轴准确的发布版字幕。"
 policy:
   allow_implicit_invocation: false

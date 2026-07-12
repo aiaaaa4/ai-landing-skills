@@ -1,6 +1,6 @@
 ---
 name: video-download
-description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视频/音频及最高质量原始封面，覆盖 YouTube、Shorts、Vimeo、TikTok、Instagram、Bilibili 等 yt-dlp 支持的来源。Use when Codex is asked to inspect available video qualities, choose resolution/container/codec, download a permitted video or playlist, save the best available source thumbnail as PNG, extract audio, merge streams, or save a media URL; list formats and confirm quality, output path, and filename before downloading.
+description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视频/音频及最高质量原始封面；进入组合工作流时，为字幕翻译准备隐藏的独立音频和一份最佳原语言字幕。Use when Codex is asked to inspect formats, download permitted media and its best source thumbnail, or prepare deterministic hidden audio/source-subtitle inputs for the video translation workflow; confirm quality, path, and filename before downloading.
 ---
 
 # 一键加速视频下载
@@ -11,7 +11,7 @@ description: 使用 yt-dlp 与 FFmpeg 下载、保存、检查或提取公开视
 
 核心价值：避免拿到链接就直接下载，减少下错清晰度、下错容器、文件名混乱、HDR/编码不兼容、输出位置不清楚等问题。默认适用于 YouTube、YouTube Shorts、Vimeo、TikTok、Instagram、X/Twitter、Facebook、Twitch、Bilibili、Dailymotion、SoundCloud、Bandcamp、Reddit 及其他 `yt-dlp` 支持的来源；完整范围以 [yt-dlp 官方站点清单](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) 为准。播放列表只在用户明确要求时处理。
 
-快速开始：把视频链接发给 AI，并说明你想要“最高画质”“MP4 兼容”“小文件”“只要音频”或让 AI 推荐。默认推荐最高可用画质，而不是为了省空间主动降到 720p。下载时同时保存平台提供的最高质量作者封面并转为 `原始封面.png`。下载若会继续做字幕翻译，AI 会在你指定的位置建立一个以中文视频名和视频 ID 命名的小工程文件夹；视频、音频、字幕和封面都放在这里。`yt-dlp` 负责解析和下载；`ffmpeg` 负责合并音视频、转换容器、提取音频和转换封面格式。
+快速开始：把视频链接发给 AI，并说明你想要“最高画质”“MP4 兼容”“小文件”“只要音频”或让 AI 推荐。默认推荐最高可用画质，而不是为了省空间主动降到 720p。下载时同时保存平台提供的最高质量作者封面并转为 `原始封面.png`。下载若会继续做字幕翻译，AI 会在你指定的位置建立一个以中文视频名和视频 ID 命名的小工程文件夹；可见目录保存视频和封面，供后续处理的独立音频及一份原语言字幕放入隐藏的 `.work/input/`。`yt-dlp` 负责解析和下载；`ffmpeg` 负责合并音视频、转换容器、提取音频和转换封面格式。
 
 效果示例：
 
@@ -49,6 +49,14 @@ command -v ffmpeg
 yt-dlp --no-playlist --no-warnings -F "VIDEO_URL"
 ```
 
+When the request will continue through `video-translate`, also inspect subtitle tracks before downloading:
+
+```bash
+yt-dlp --no-playlist --no-warnings --list-subs "VIDEO_URL"
+```
+
+Choose at most one subtitle track in the confirmed source language. Prefer a creator-provided/manual track; use an automatic track only when no manual track exists and report that distinction. Never download every language.
+
 Use `--no-playlist` unless the user explicitly asks for a playlist.
 
 3. Summarize the useful choices:
@@ -64,7 +72,7 @@ Mention format IDs or selectors, resolution, FPS, HDR/SDR, video codec, audio co
 5. Confirm the parent download location and create a media project folder.
    - Treat every download that may continue to subtitle translation as one media project, not a loose collection of files.
    - Use the confirmed location as `PARENT_DIR`, then create `PROJECT_DIR` named `<localized video title> [<video id>]` beneath it. Localize the title to the user's requested language when asked.
-   - Save the video, an explicitly downloaded audio-only file, ASS/SRT outputs, and hidden working artifacts under `PROJECT_DIR`. Do not leave related files in the parent directory.
+   - Save the video and final ASS/SRT outputs under `PROJECT_DIR`. In the combined workflow, save the independent audio and selected original-language subtitle under `PROJECT_DIR/.work/input/`; they are temporary translation inputs, not final deliverables.
    - Save only the best available platform thumbnail, convert it to PNG, and name it `原始封面.png` under `PROJECT_DIR`. Use `--write-thumbnail`, not `--write-all-thumbnails`.
    - Pass the same `PROJECT_DIR` to video translation as both its `--outputs-dir` and the parent of its hidden `.work/` directory.
 
@@ -133,8 +141,35 @@ yt-dlp --no-playlist --windows-filenames \
   "VIDEO_URL"
 ```
 
+## Combined Video Workflow
+
+When this download is explicitly continuing to `video-translate` and `video-publish`, use the confirmed video command above, then prepare deterministic hidden inputs:
+
+```bash
+mkdir -p "PROJECT_DIR/.work/input"
+
+yt-dlp --no-playlist --windows-filenames \
+  -f "ba[ext=m4a]/ba" \
+  -P "PROJECT_DIR/.work/input" \
+  -o "MEDIA_STEM.%(ext)s" \
+  "VIDEO_URL"
+```
+
+If `--list-subs` showed a usable track in `SOURCE_LANG`, download exactly that track and normalize it to SRT:
+
+```bash
+yt-dlp --no-playlist --windows-filenames --skip-download \
+  --write-subs --sub-langs "SOURCE_LANG" \
+  --sub-format "srt/vtt/best" --convert-subs srt \
+  -P "PROJECT_DIR/.work/input" \
+  -o "subtitle:MEDIA_STEM.原语言字幕.%(ext)s" \
+  "VIDEO_URL"
+```
+
+For an automatic track, replace `--write-subs` with `--write-auto-subs`. Keep the video basename exactly equal to `MEDIA_STEM`, so `video-translate` can discover the hidden audio and reference subtitle without scanning unrelated files. Fun-ASR still runs even when a source subtitle exists: ASR supplies word-level timestamps, while the downloaded subtitle is only a lexical correction reference. After successful subtitle export, `video-translate` removes these hidden inputs.
+
 ## Final Response
 
-After downloading, report the saved media path, `原始封面.png` path, file size, selected format IDs or selector, confirmed output directory, confirmed filename, and any important caveats such as HDR, MKV playback, subtitles, or audio language. If the platform exposes no thumbnail, report that clearly instead of substituting a video frame.
+After downloading, report the saved media path, `原始封面.png` path, file size, selected format IDs or selector, confirmed output directory, confirmed filename, and any important caveats such as HDR, MKV playback, subtitles, or audio language. In the combined workflow, also report whether the hidden audio and manual/automatic source subtitle were prepared. If the platform exposes no thumbnail, report that clearly instead of substituting a video frame.
 
 Remind the user to download only content they have permission to save or use when relevant.

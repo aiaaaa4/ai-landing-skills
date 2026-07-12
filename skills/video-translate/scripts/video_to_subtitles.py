@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import os
 import re
 import shutil
@@ -41,6 +42,17 @@ def parse_args() -> argparse.Namespace:
         help="Working directory. Defaults to .work/<run-id> inside the subtitle output directory.",
     )
     parser.add_argument("--outputs-dir", type=Path, default=None)
+    parser.add_argument(
+        "--source-subtitle",
+        type=Path,
+        default=None,
+        help="Optional original-language SRT/VTT used to correct ASR text while preserving Fun-ASR word timestamps.",
+    )
+    parser.add_argument(
+        "--keep-workflow-inputs",
+        action="store_true",
+        help="Keep downloader-created files under .work/input after successful export for debugging.",
+    )
     parser.add_argument("--segments", type=Path, default=None, help="Optional completed segments.txt to copy in.")
     parser.add_argument(
         "--subtitle-tag",
@@ -120,11 +132,59 @@ def resolve_asr_media(media: Path) -> Path:
     """Reuse a downloader-provided sibling audio file when it matches the media basename."""
     if media.suffix.lower() in AUDIO_SUFFIXES:
         return media
+    hidden_input = media.parent / ".work" / "input"
+    for suffix in AUDIO_SUFFIXES:
+        candidate = hidden_input / f"{media.stem}{suffix}"
+        if candidate.exists() and candidate.stat().st_size > 0:
+            return candidate
     for suffix in AUDIO_SUFFIXES:
         candidate = media.with_suffix(suffix)
         if candidate.exists() and candidate.stat().st_size > 0:
             return candidate
     return media
+
+
+def resolve_source_subtitle(media: Path, explicit: Path | None) -> Path | None:
+    if explicit:
+        resolved = explicit.expanduser().resolve()
+        if not resolved.is_file():
+            raise RuntimeError(f"Source subtitle reference was not found: {resolved}")
+        if resolved.suffix.lower() not in {".srt", ".vtt"}:
+            raise RuntimeError("Source subtitle reference must be SRT or VTT.")
+        return resolved
+    hidden_input = media.parent / ".work" / "input"
+    preferred = [
+        hidden_input / f"{media.stem}.原语言字幕.srt",
+        hidden_input / f"{media.stem}.原语言字幕.vtt",
+    ]
+    for candidate in preferred:
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate.resolve()
+    candidates = sorted(
+        path.resolve()
+        for suffix in (".srt", ".vtt")
+        for path in hidden_input.glob(f"{media.stem}*{suffix}")
+        if path.is_file() and "双语字幕" not in path.name
+    )
+    if len(candidates) > 1:
+        raise RuntimeError(
+            "Multiple source subtitle references were found under .work/input; "
+            "keep one or pass --source-subtitle explicitly."
+        )
+    return candidates[0] if candidates else None
+
+
+def cleanup_workflow_inputs(media: Path, paths: list[Path | None]) -> list[Path]:
+    input_root = (media.parent / ".work" / "input").resolve()
+    removed: list[Path] = []
+    for path in {item.resolve() for item in paths if item and item.exists()}:
+        if path == media or not path.is_relative_to(input_root):
+            continue
+        path.unlink()
+        removed.append(path)
+    if input_root.is_dir() and not any(input_root.iterdir()):
+        input_root.rmdir()
+    return sorted(removed)
 
 
 def default_outputs_dir() -> Path:
@@ -261,9 +321,31 @@ def source_language_name(language: str) -> str:
     return mapping.get(value, language or "English")
 
 
-def ensure_ai_segments(work_dir: Path, transcript_dir: Path, language: str, domain_name: str) -> None:
+def ensure_ai_segments(
+    work_dir: Path,
+    transcript_dir: Path,
+    language: str,
+    domain_name: str,
+    source_subtitle: Path | None,
+) -> None:
     segments = work_dir / "segments.txt"
     if segments.exists():
+        meta_path = work_dir / "segment_generation_meta.json"
+        if source_subtitle:
+            if not meta_path.exists():
+                raise RuntimeError(
+                    "Existing segments have no source-reference metadata. "
+                    "Use a new --run-id so corrected text and cached translations cannot mix."
+                )
+            meta = read_json(meta_path)
+            previous = str(meta.get("source_subtitle") or "")
+            previous_hash = str(meta.get("source_subtitle_sha256") or "")
+            current_hash = hashlib.sha256(source_subtitle.read_bytes()).hexdigest()
+            if previous != str(source_subtitle) or previous_hash != current_hash:
+                raise RuntimeError(
+                    "Existing segments were generated with a different source subtitle reference. "
+                    "Use a new --run-id so corrected text and cached translations cannot mix."
+                )
         print(f"Using existing segments: {segments}", flush=True)
         return
 
@@ -292,6 +374,8 @@ def ensure_ai_segments(work_dir: Path, transcript_dir: Path, language: str, doma
     ]
     if screen_context.exists() and screen_context.stat().st_size > 0:
         cmd.extend(["--screen-context", str(screen_context)])
+    if source_subtitle:
+        cmd.extend(["--source-subtitle", str(source_subtitle)])
     run_step(cmd)
 
 
@@ -567,10 +651,14 @@ def write_run_summary(
         translation_path = "helper_dashscope"
         effective_translation_model = str(helper_meta.get("model") or translation_model or "unknown")
         helper_detail = f"fallback={helper_meta.get('fallback_model', 'none')}; concurrency={helper_meta.get('concurrency', 'unknown')}; batches cached via helper"
+        source_reference = str(helper_meta.get("source_subtitle") or "none")
+        reference_corrected_chunks = str(helper_meta.get("reference_corrected_chunks") or 0)
     else:
         translation_path = "main_orchestrator"
         effective_translation_model = translation_model or orchestrator_model
         helper_detail = "not used"
+        source_reference = "none"
+        reference_corrected_chunks = "0"
 
     timings = read_optional_json(timings_path)
     timing_lines: list[str] = []
@@ -617,6 +705,8 @@ def write_run_summary(
         f"- Segment translation path: {translation_path}",
         f"- Segment translation model: {effective_translation_model}",
         f"- Helper detail: {helper_detail}",
+        f"- Source subtitle reference: {source_reference}",
+        f"- Reference-corrected chunks: {reference_corrected_chunks}",
         "",
         "## Step Timings",
         "",
@@ -783,11 +873,12 @@ def main() -> int:
     subtitles_dir = run_dir / "subtitles"
     work_dir.mkdir(parents=True, exist_ok=True)
     asr_media = resolve_asr_media(media)
+    source_subtitle = resolve_source_subtitle(media, args.source_subtitle)
     record_step_status(
         work_dir,
         "start",
         "running",
-        f"media={media}; asr_media={asr_media}; language={args.language}",
+        f"media={media}; asr_media={asr_media}; source_subtitle={source_subtitle}; language={args.language}",
     )
     output_tag = args.subtitle_tag or default_subtitle_tag(args.language)
     # Strip stray whitespace from the video name so outputs never contain
@@ -798,6 +889,8 @@ def main() -> int:
     print(f"Media: {media}", flush=True)
     if asr_media != media:
         print(f"Reusing downloader-provided audio for ASR: {asr_media}", flush=True)
+    if source_subtitle:
+        print(f"Using source subtitle as ASR correction reference: {source_subtitle}", flush=True)
     print(f"Run dir: {run_dir}", flush=True)
     print(f"Outputs: {outputs_dir}", flush=True)
     print_run_expectation(media)
@@ -832,7 +925,7 @@ def main() -> int:
     step_started = time.monotonic()
     maybe_copy_segments(args.segments, work_dir / "segments.txt")
     if not args.segments:
-        ensure_ai_segments(work_dir, transcript_dir, args.language, args.domain_name)
+        ensure_ai_segments(work_dir, transcript_dir, args.language, args.domain_name, source_subtitle)
     record_step_timing(
         work_dir,
         "ai_segments",
@@ -871,6 +964,13 @@ def main() -> int:
         translation_model,
     )
     record_step_status(work_dir, "export", "done", f"outputs={outputs_dir}")
+    if not args.keep_workflow_inputs:
+        removed_inputs = cleanup_workflow_inputs(media, [asr_media, source_subtitle])
+        if removed_inputs:
+            print("Removed temporary combined-workflow inputs:", flush=True)
+            for removed in removed_inputs:
+                print(f"- {removed}", flush=True)
+            record_step_status(work_dir, "input_cleanup", "done", f"removed={len(removed_inputs)}")
     print(f"Done in {elapsed:.1f}s ({elapsed / 60:.1f} min)", flush=True)
     return 0
 

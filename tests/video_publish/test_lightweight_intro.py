@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 import random
+from fractions import Fraction
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +16,7 @@ from prepend_intro import (  # noqa: E402
     build_intro_command,
     build_mux_command,
     build_source_transport_command,
+    find_frame_hash_offset,
     transport_offset_seconds,
     parse_args,
     validate_args,
@@ -82,11 +84,28 @@ class LightweightIntroTest(unittest.TestCase):
         self.assertEqual(source, self.source.resolve())
         self.assertIsNone(subtitle)
         self.assertIsNone(subtitle_output)
-        self.assertEqual(timeline_output, self.output.with_suffix(".timeline.json").resolve())
+        self.assertEqual(
+            timeline_output,
+            (self.root / ".work" / "publish" / "output.timeline.json").resolve(),
+        )
 
     def test_calculates_transport_offset_from_actual_frame_rate(self):
         media = {"video": {"r_frame_rate": "25/1"}}
         self.assertAlmostEqual(transport_offset_seconds(media, 3), 3.080011111, places=8)
+
+    def test_prefers_decoded_audio_content_offset(self):
+        source_frames = [(index, f"hash-{index}") for index in range(30)]
+        output_frames = [(index * 100, "silence") for index in range(30)]
+        output_frames.extend((3063 + index, f"hash-{index}") for index in range(30))
+        offset = find_frame_hash_offset(
+            Fraction(1, 1000),
+            source_frames,
+            Fraction(1, 1000),
+            output_frames,
+            "a",
+            3.0,
+        )
+        self.assertAlmostEqual(offset, 3.063, places=6)
 
     def test_derives_and_shifts_release_subtitle(self):
         subtitle = self.root / "source.中英双语字幕.srt"

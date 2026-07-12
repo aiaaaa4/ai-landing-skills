@@ -1,4 +1,4 @@
 interface:
   display_name: "一键加速视频下载"
-  short_description: "下载多站点最高画质视频或音频，并保存最高质量原始封面 PNG。"
-  default_prompt: "使用 $video-download 检查这个视频链接的最高画质；确认中文项目名、保存位置和文件名后，把媒体及最高质量原始封面 PNG 下载到同一项目文件夹。"
+  short_description: "下载最高画质视频与原始封面，并为翻译流程准备隐藏音频和原字幕。"
+  default_prompt: "使用 $video-download 检查链接可用格式，确认画质、项目名、保存位置和文件名后下载视频及最高质量原始封面；若继续字幕翻译，同时准备隐藏的独立音频和一份最佳原语言字幕。"

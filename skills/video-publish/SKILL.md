@@ -1,6 +1,6 @@
 ---
 name: video-publish
-description: 使用本地 FFmpeg 从视频前半段随机抽取 5 张独立投稿封面，并在视频开头轻量添加 3 秒固定免责声明；默认不重编码原视频主体。也支持明确需要时的字幕烧录、水印、裁切与完整重编码。Use when a user asks to prepare a local video for publishing, generate five standalone cover candidates, prepend a three-second disclaimer, or explicitly apply burned subtitles, watermarks, or full-video filters.
+description: 使用本地 FFmpeg 抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒免责声明，并通过音频内容匹配生成时间轴准确的发布版 SRT；默认不重编码原视频主体。Use when preparing a local video for publishing, generating five cover candidates, prepending a disclaimer, or creating a release SRT aligned to the actual source-audio offset.
 permissions:
   - file_read
   - file_write
@@ -18,7 +18,7 @@ metadata:
 
 作者 / 工作流设计：`AI落地第四声`。这是纯本地 FFmpeg 后处理：不上传视频、不读取凭据、不调用云端 API。
 
-默认流程是：从视频前半段分区随机抽取 `5` 张独立投稿封面，保存为 `抽帧封面1.png` 至 `抽帧封面5.png`；同时在视频开头添加固定免责声明 `3` 秒。封面只作为独立图片交付，不再拼进视频；只编码免责声明片头，原视频主体使用码流复制。若用户提供与源视频匹配的双语 SRT，则根据发布版中正文的实际起点自动生成一个时间轴匹配的发布版 SRT，不修改源字幕。
+默认流程是：从视频前半段分区随机抽取 `5` 张独立投稿封面，保存为 `抽帧封面1.png` 至 `抽帧封面5.png`；同时在视频开头添加固定免责声明 `3` 秒。封面只作为独立图片交付，不再拼进视频；只编码免责声明片头，原视频主体使用码流复制。若用户提供与源视频匹配的双语 SRT，则优先通过连续音频帧匹配探测原始语音在发布版中的实际起点，再生成一个时间轴匹配的发布版 SRT，不修改源字幕。
 
 ## Environment
 
@@ -60,7 +60,7 @@ python scripts/prepend_intro.py \
   --output "/absolute/path/source-发布版.mp4"
 ```
 
-传入 `--subtitle` 后，默认按视频命名生成 `source-发布版.中英双语字幕.srt`，并生成 `source-发布版.timeline.json`。清单同时记录用户选择的免责声明时长和 FFmpeg 拼接后正文的实际 `content_offset_seconds`；发布版 SRT 使用后者平移全部 cue。使用 `--preview-content-seconds 8` 可先输出约 11 秒的短预览。默认只支持将免责声明轻量拼接到 H.264 `yuv420p` + AAC MP4；其他编码格式应明确告知用户并改用完整重编码。
+传入 `--subtitle` 后，默认按视频命名生成 `source-发布版.中英双语字幕.srt`，并在 `.work/publish/` 生成时间线清单。清单同时记录用户选择的免责声明时长、实际 `content_offset_seconds` 及偏移依据；发布版 SRT 使用实际语音偏移平移全部 cue。使用 `--preview-content-seconds 8` 可先输出约 11 秒的短预览。默认只支持将免责声明轻量拼接到 H.264 `yuv420p` + AAC MP4；其他编码格式应明确告知用户并改用完整重编码。
 
 ## Advanced Run
 

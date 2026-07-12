@@ -2,7 +2,7 @@
 # Author information is for display and source identification, not an additional license restriction.
 interface:
   display_name: "人工级视频字幕翻译"
-  short_description: "在用户明确同意后，将其指定的本地媒体转为双语字幕；音频会发送至 OkFile 与阿里云处理。"
-  default_prompt: "仅在用户明确请求视频字幕翻译时使用 $video-translate。先确认唯一媒体路径、源语言、输出目录、是否需要屏幕上下文，并获得将该媒体音频上传至 OkFile 和阿里云处理的明确同意。未经同意，不读取或创建 .env、不运行命令、不访问本地媒体或网络。"
+  short_description: "用 Fun-ASR 词级时间戳和可选原字幕校正生成高质量双语字幕。"
+  default_prompt: "仅在用户明确请求视频字幕翻译时使用 $video-translate。先确认媒体路径、源语言、输出目录、屏幕上下文需求和外发处理同意；始终用 Fun-ASR 获取词级时间戳，若项目有原语言字幕则只用于内容校正，最后输出双语 ASS/SRT。"
 policy:
   allow_implicit_invocation: false
