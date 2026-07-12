@@ -12,8 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DISALLOWED_PARTS = {".env", "outputs", "runtime", ".DS_Store", "__pycache__", ".pytest_cache"}
 DISALLOWED_SUFFIXES = {".mp4", ".mov", ".mkv", ".zip", ".log", ".pyc"}
 LOCAL_ONLY_DIRS = {".git", "local-projects"}
-SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$")
+SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 ALLOWED_SKILL_FRONTMATTER_KEYS = {"name", "description", "permissions", "metadata"}
+EXPECTED_PLATFORMS = {"github", "clawhub", "skills.sh", "skillhub", "skillsmp"}
 
 
 def fail(message: str) -> None:
@@ -74,12 +75,15 @@ def validate_registry() -> list[dict]:
         kind = item.get("kind")
         display_name = item.get("display_name")
         version = item.get("version")
+        platforms = item.get("platforms")
         if not all(isinstance(x, str) and x for x in [skill_id, slug, rel_path, kind, display_name, version]):
             fail(f"registry item has missing required fields: {item}")
         if skill_id != f"aiaaaa4.{slug}":
             fail(f"registry skill_id must match namespace and slug: {skill_id}")
         if not SEMVER_PATTERN.fullmatch(version):
             fail(f"registry version must be semver for {slug}: {version}")
+        if not isinstance(platforms, list) or set(platforms) != EXPECTED_PLATFORMS:
+            fail(f"registry platforms are incomplete for {slug}: {platforms}")
         if skill_id in seen_ids:
             fail(f"duplicate skill_id: {skill_id}")
         if slug in seen_slugs:
@@ -105,6 +109,17 @@ def validate_registry() -> list[dict]:
                 fail(f"registry ClawHub topics are invalid for {slug}")
 
     return items
+
+
+def validate_readme(items: list[dict]) -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for item in items:
+        identity = f"**`{item['skill_id']}` · v{item['version']} ·"
+        if readme.count(identity) != 1:
+            fail(f"README identity/version is missing or duplicated for {item['slug']}: {identity}")
+        clawhub_url = f"[ClawHub](https://clawhub.ai/aiaaaa4/{item['slug']})"
+        if readme.count(clawhub_url) != 1:
+            fail(f"README ClawHub link is missing or duplicated for {item['slug']}")
 
 
 def validate_skills(items: list[dict]) -> None:
@@ -176,6 +191,7 @@ def validate_public_tree() -> None:
 
 def main() -> None:
     items = validate_registry()
+    validate_readme(items)
     validate_skills(items)
     validate_scripts()
     validate_public_tree()

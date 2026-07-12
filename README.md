@@ -109,12 +109,15 @@ npx skills add aiaaaa4/ai-landing-skills --skill cloud-file-mgmt --full-depth
         ↓
 GitHub Actions 选择一个 Skill 发布到 ClawHub
         ↓
-ClawHub 独立版本更新 / skills.sh 直接读取 GitHub 最新源码
+ClawHub 独立版本更新并完成安全扫描
+        ↓
+skills.sh 异步刷新 / SkillHub 手动维护或等待镜像
 ```
 
 - `registry.json` 是公开 ID、展示名称、目录、版本和平台目标的唯一来源。
 - 每个 installable Skill 只包含执行需要的 `SKILL.md`、脚本、引用资料和资源；较长的用户文档放在 `docs/`。
 - 发布时始终一次选择一个 Skill，并先运行 GitHub Actions 的 dry run。完整步骤见 [发布说明](docs/RELEASING.md)。
+- `skills.sh` 的实际安装会克隆 GitHub 最新源码，但目录页面和安全审计异步刷新；SkillHub 镜像不作为发布完成依据。
 - 长期项目边界、版本规则和本地运行策略见 [项目总控上下文](docs/PROJECT_CONTEXT.md)。
 - `rithmic-signup` 是私有 App，位于独立私有仓库，不会出现在这个公开目录或公共 Skill 平台。
 
