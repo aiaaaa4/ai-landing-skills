@@ -31,7 +31,7 @@
       "skill_id": "aiaaaa4.video-translate",
       "display_name": "人工级视频字幕翻译",
       "path": "skills/video-translate",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-translate",

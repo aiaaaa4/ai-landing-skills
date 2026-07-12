@@ -22,13 +22,17 @@ DEFAULT_TERM_RULES = PROJECT_ROOT / "references" / "term_repair_rules.json"
 NORMAL_WORD_LIMIT = 20_000
 LONG_WORD_LIMIT = 50_000
 AUDIO_SUFFIXES = (".m4a", ".mp3", ".aac", ".wav", ".flac", ".ogg", ".opus")
+VIDEO_SUFFIXES = (
+    ".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v", ".mpeg",
+    ".mpg", ".ts", ".mts", ".m2ts", ".flv", ".wmv", ".3gp",
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the fixed video subtitle workflow: ffmpeg -> OkFile -> Fun-ASR -> qwen-mt-plus helper segments -> subtitles."
     )
-    parser.add_argument("media", type=Path, help="Input local video or audio file.")
+    parser.add_argument("media", type=Path, help="Input local video file. Direct audio input is not supported.")
     parser.add_argument(
         "--language",
         default="en",
@@ -89,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--confirm-external-processing",
         action="store_true",
-        help="Required acknowledgement before the selected media is sent to OkFile and Alibaba services.",
+        help="Required acknowledgement before audio prepared from the selected video is sent to OkFile and Alibaba services.",
     )
     parser.add_argument("--skip-env-check", action="store_true")
     return parser.parse_args()
@@ -957,6 +961,13 @@ def main() -> int:
     media = args.media.expanduser().resolve()
     if not media.exists():
         print(f"Input media not found: {media}", file=sys.stderr)
+        return 2
+    if not media.is_file() or media.suffix.lower() not in VIDEO_SUFFIXES:
+        print(
+            "video-translate accepts video files only; direct audio input is not supported. "
+            f"Received: {media}",
+            file=sys.stderr,
+        )
         return 2
     if not args.confirm_external_processing:
         print(

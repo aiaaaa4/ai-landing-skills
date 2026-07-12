@@ -1,6 +1,6 @@
 ---
 name: video-translate
-description: 将用户明确选择的本地视频或音频转为中英双语 ASS/SRT；始终用 Fun-ASR 获取词级时间戳，并可用下载的原语言字幕校正识别内容。仅在用户确认路径、输出目录及 OkFile/阿里云外发处理后运行。Use only after explicit consent to process selected local media with OkFile, Fun-ASR, and qwen-mt-plus; an optional source subtitle corrects text but never replaces ASR timing.
+description: 将用户明确选择的本地视频转为中英双语 ASS/SRT；不接受用户直接提供的音频文件。始终用 Fun-ASR 获取词级时间戳，并可用下载的原语言字幕校正识别内容。仅在用户确认路径、输出目录及外发处理后运行。Use only for a user-selected local video; reject direct audio input while allowing hidden workflow audio to be reused internally.
 permissions:
   - file_read
   - file_write
@@ -39,7 +39,7 @@ metadata:
 
 这是一套面向本地录制视频的高质量字幕翻译工作流。它始终使用 Fun-ASR 获取词级时间戳；若下载工作流同时提供了原语言字幕，则按时间范围将其与 ASR 片段比对，只用来校正识别文本、专名和标点，时间轴仍以 ASR 为准。`qwen-mt-plus` 负责稳定初译，当前编排模型随后必须通读全片，建立全文大纲、术语和专名上下文，再做语义重分段与译文复核；确定性 QA 后还要完成一次全文一致性 QC，全部通过才导出中文字幕在上、原文在下的 ASS/SRT 字幕。
 
-快速开始：准备 OkFile API Key、阿里 DashScope API Key、阿里工作空间 ID，并提供本地视频或音频路径。AI 仅在你明确确认媒体路径、输出位置和外发处理同意后，才会读取本机 `.env`、上传选定音频并运行固定生产流程。长视频开始前必须说明大致耗时，执行中每 10 分钟反馈状态。
+快速开始：准备 OkFile API Key、阿里 DashScope API Key、阿里工作空间 ID，并提供本地视频路径。用户直接提供音频时必须拒绝；组合工作流仍可在内部复用 `video-download` 写入 `.work/input/` 的音频。AI 仅在你明确确认视频路径、输出位置和外发处理同意后，才会读取本机 `.env`、上传处理音频并运行固定生产流程。
 
 ## 首次安装提示
 
@@ -59,7 +59,7 @@ metadata:
 
 ## Execution Contract
 
-Use this skill only for local recorded media. Before every production run, read [the full execution contract](references/execution-contract.md) in full. It defines the segment format, QA gates, repair rules, export layout, long-run behavior, and cleanup rules.
+Use this skill only for local recorded video. Reject user-selected audio files. Before every production run, read [the full execution contract](references/execution-contract.md) in full.
 
 Keep this production stack fixed unless the user explicitly requests an engineering redesign and accepts revalidation:
 
@@ -104,7 +104,7 @@ Do not ask ordinary users to choose ASR, segment-generation, or orchestration mo
 Start a normal run with:
 
 ```bash
-python scripts/video_to_subtitles.py "/absolute/path/to/video-or-audio.mp4" --language en --confirm-external-processing
+python scripts/video_to_subtitles.py "/absolute/path/to/video.mp4" --language en --confirm-external-processing
 ```
 
 Add `--outputs-dir "<project-path>"` after the user confirms the media project folder. The default working directory becomes `<project-path>/.work/`, keeping intermediate files out of the Skill source directory. For screen-recording guidance, read [screen context rules](references/screen_context.md) before generating screenshots.

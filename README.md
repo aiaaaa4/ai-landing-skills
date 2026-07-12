@@ -39,7 +39,7 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.4.1 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.4.2 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，由翻译模型完成稳定初译，再由编排模型通读全片、理解上下文、语义重分段，并通过确定性 QA 与最终全文一致性 QC 后输出 ASS/SRT。
 

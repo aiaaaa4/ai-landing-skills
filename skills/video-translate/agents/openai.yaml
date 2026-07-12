@@ -3,6 +3,6 @@
 interface:
   display_name: "人工级视频字幕翻译"
   short_description: "用词级时间轴、全文语义审校和双重 QC 生成高质量双语字幕。"
-  default_prompt: "仅在用户明确请求视频字幕翻译时使用 $video-translate。先确认媒体路径、源语言、输出目录、屏幕上下文需求和外发处理同意；始终用 Fun-ASR 获取词级时间戳，以 qwen-mt-plus 初译，再由当前编排模型通读全文、语义重分段并完成最终全文 QC，全部门禁通过后输出双语 ASS/SRT。"
+  default_prompt: "仅在用户明确请求本地视频字幕翻译时使用 $video-translate；用户直接提供音频必须拒绝。先确认视频路径、源语言、输出目录、屏幕上下文需求和外发处理同意；始终用 Fun-ASR 获取词级时间戳，以 qwen-mt-plus 初译，再由当前编排模型通读全文、语义重分段并完成最终全文 QC，全部门禁通过后输出双语 ASS/SRT。"
 policy:
   allow_implicit_invocation: false
