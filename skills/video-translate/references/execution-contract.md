@@ -13,9 +13,11 @@ Use this skill for local media files only. The fixed production stack is:
 3. Submit the URL to Alibaba Fun-ASR even when an original-language subtitle exists.
 4. Use Fun-ASR words and word timestamps as the alignment source of truth.
 5. If one original-language SRT/VTT exists under `.work/input/`, map it to ASR segments by temporal overlap and use sufficiently similar text to correct display/translation content without changing `SRC_RAW`.
-6. Create `segments.txt` automatically with the fixed Alibaba `qwen-mt-plus` helper.
-7. Repair terms, validate `SRC_RAW` (with automatic recovery of lightly rewritten lines), align word timestamps, auto-merge mechanically-fixable cues, run QA, and export SRT/ASS.
-8. After successful export, delete only the downloader-created audio and source subtitle under `.work/input/`.
+6. Create initial draft segments automatically with the fixed Alibaba `qwen-mt-plus` helper.
+7. Require the orchestrator to read all semantic-review sections, build one global context for the complete video, and review/re-segment every target range by meaning.
+8. Validate hashed full coverage, repair terms, align word timestamps, and run deterministic QA.
+9. Require a second orchestrator pass over all final-QC sections for whole-document consistency, then export SRT/ASS only when every check passes.
+10. After successful export, delete only the downloader-created audio and source subtitle under `.work/input/`.
 
 Do not switch ASR providers, use local Whisper, or add backup paths unless the user explicitly asks.
 
@@ -25,8 +27,8 @@ Do not switch ASR providers, use local Whisper, or add backup paths unless the u
 Do not ask ordinary users to choose among many models. The production stack is fixed because it has been tested on real subtitle jobs and is more reliable than ad-hoc model switching.
 
 - ASR: Alibaba Bailian / DashScope `Fun-ASR`. It is required because the workflow depends on long-recorded-audio ASR and word-level timestamps.
-- Segment translation/generation: Alibaba Bailian `qwen-mt-plus`, called by `scripts/generate_segments_with_dashscope.py`. This is now the normal production path for creating `segments.txt`, with cache/resume support. Production concurrency is fixed to serial mode (`--concurrency 1`) because qwen-mt-plus is more stable and avoids rate-limit fallback/chaos; quality and reliability are prioritized over maximum speed. The qwen-mt path uses the workspace-specific Alibaba endpoint from `ALIYUN_WORKSPACE_ID` / `ALIYUN_REGION` and sends no `system` role because Qwen-MT accepts only `user`/`assistant` roles.
-- Orchestrator: if running in WorkBuddy, use DeepSeek V4 Pro. If running in Codex/Cursor or a coding-agent environment, recommend GPT 5.5-class models. The orchestrator runs tools, keeps long tasks alive, performs timestamp alignment, QA repair, subtitle export, and returns the final chat summary.
+- Initial translation: Alibaba Bailian `qwen-mt-plus`, called by `scripts/generate_segments_with_dashscope.py`. It provides stable, cached draft translations in serial mode (`--concurrency 1`), but it does not establish the final whole-document segmentation or consistency judgment.
+- Orchestrator: if running in WorkBuddy, use DeepSeek V4 Pro. If running in Codex/Cursor or a coding-agent environment, recommend GPT 5.5-class models. The orchestrator must read every section of the complete transcript, build a global outline/terminology/entity/style context, perform semantic re-segmentation and translation review, then perform a separate whole-document final QC after deterministic checks. It also runs tools, keeps long tasks alive, exports subtitles, and returns the final summary.
 
 Do not switch ASR providers, use local Whisper, or add backup model paths unless the user explicitly asks for that engineering change and accepts revalidation. Groq Whisper or other providers must prove word-level timestamps before production use.
 
@@ -85,7 +87,7 @@ For non-finance domains, keep the pipeline but ask for or maintain a domain glos
 First use message after environment check, in Chinese:
 
 ```text
-这套工作流会先在本地准备所选视频的音频，通过 OkFile 生成临时音频链接，再用阿里 Fun-ASR 做词级转写；随后固定调用阿里 qwen-mt-plus 生成分段翻译，最后由当前 AI agent 做时间轴匹配、术语修复、质检和 ASS/SRT 导出。音频会上传至 OkFile，临时链接会发送给阿里 Fun-ASR，字幕文本会发送给阿里 qwen-mt-plus；只有在你明确同意后才会开始外发。当前固定模型组合是多轮视频测试后效果和性价比最稳的方案：转写用 Fun-ASR，分段翻译用 qwen-mt-plus；WorkBuddy 编排建议用 DeepSeek V4 Pro，Codex/Cursor 编排建议用 GPT 5.5 级模型。请准备 DASHSCOPE_API_KEY、ALIYUN_WORKSPACE_ID、OKFILE_TOKEN 并写入 .env，准备好后把本地视频路径发来即可。详细说明可看：视频翻译工作流说明书.md。
+这套工作流会先在本地准备所选视频的音频，通过 OkFile 生成临时音频链接，再用阿里 Fun-ASR 做词级转写；随后固定调用阿里 qwen-mt-plus 生成逐段初译，由当前 AI agent 通读全片后完成语义重分段、翻译复核和最终全文一致性 QC，再做时间轴匹配、术语修复和 ASS/SRT 导出。音频会上传至 OkFile，临时链接会发送给阿里 Fun-ASR，字幕文本会发送给阿里 qwen-mt-plus；只有在你明确同意后才会开始外发。WorkBuddy 编排建议用 DeepSeek V4 Pro，Codex/Cursor 编排建议用 GPT 5.5 级模型。请准备 DASHSCOPE_API_KEY、ALIYUN_WORKSPACE_ID、OKFILE_TOKEN 并写入 .env，准备好后把本地视频路径发来即可。详细说明可看：视频翻译工作流说明书.md。
 ```
 
 Before starting each user-provided video, confirm only these points unless already clear:
@@ -163,9 +165,10 @@ Normal run lifecycle:
 1. The wrapper checks environment, transcribes with Fun-ASR, extracts word stream, and writes `prompt.txt` for audit/repair context.
 2. If a source-language SRT/VTT exists, the wrapper maps cues to ASR segments by overlap. Similar reference text corrects `SRC_DISPLAY` and qwen-mt-plus input while ASR `SRC_RAW` remains unchanged for timestamp alignment and coverage validation.
 3. If `segments.txt` does not already exist or was not supplied with `--segments`, the wrapper automatically calls `scripts/generate_segments_with_dashscope.py --model auto`, which resolves to fixed `qwen-mt-plus`.
-4. The wrapper repairs terms, validates `SRC_RAW`, aligns timestamps, runs automatic merge/fix, final QA, and ASS/SRT export.
-5. If QA blocks export, the AI runner repairs `segments.txt` using `final_qa_prompt.txt` and `final_qa_report.md`, then reruns. Ask the user only after two failed AI repair attempts or when domain judgment is required.
-6. After successful export, delete only `.work/input/` audio/source-subtitle inputs and return the completion summary in chat.
+4. The wrapper pauses with exit code `3` and generates `work/global_review/semantic/`. The orchestrator reads every section in manifest order before editing, builds one global context, reviews every target range, writes hash-bound section outputs and the semantic receipt, then reruns the same command.
+5. The wrapper validates exact source-word coverage, repairs terms, aligns timestamps, and runs deterministic QA. Length and duration rules are guardrails applied after semantic review, not the primary segmentation algorithm.
+6. The wrapper pauses with exit code `4` and generates `work/global_review/final-qc/`. The orchestrator reads the global context, QA report, and every final section, then records all required whole-document checks. Any finding requires revising semantic-review outputs and rerunning; only `status=passed` permits export.
+7. After successful export, delete only `.work/input/` audio/source-subtitle inputs and return the completion summary in chat.
 
 ## `segments.txt` Format
 

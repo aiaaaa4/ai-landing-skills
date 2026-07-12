@@ -37,17 +37,17 @@ metadata:
 
 作者 / 工作流设计：`AI落地第四声`。本作者信息用于展示和来源识别，不添加额外授权限制。
 
-这是一套面向本地录制视频的高质量字幕翻译工作流。它始终使用 Fun-ASR 获取词级时间戳；若下载工作流同时提供了原语言字幕，则按时间范围将其与 ASR 片段比对，只用来校正识别文本、专名和标点，时间轴仍以 ASR 为准。随后执行 AI 语义分段、翻译、术语修复和自动 QA，导出中文字幕在上、原文在下的 ASS/SRT 字幕。默认目标语言为中文，常用源语言为英语、法语、西班牙语和意大利语。
+这是一套面向本地录制视频的高质量字幕翻译工作流。它始终使用 Fun-ASR 获取词级时间戳；若下载工作流同时提供了原语言字幕，则按时间范围将其与 ASR 片段比对，只用来校正识别文本、专名和标点，时间轴仍以 ASR 为准。`qwen-mt-plus` 负责稳定初译，当前编排模型随后必须通读全片，建立全文大纲、术语和专名上下文，再做语义重分段与译文复核；确定性 QA 后还要完成一次全文一致性 QC，全部通过才导出中文字幕在上、原文在下的 ASS/SRT 字幕。
 
 快速开始：准备 OkFile API Key、阿里 DashScope API Key、阿里工作空间 ID，并提供本地视频或音频路径。AI 仅在你明确确认媒体路径、输出位置和外发处理同意后，才会读取本机 `.env`、上传选定音频并运行固定生产流程。长视频开始前必须说明大致耗时，执行中每 10 分钟反馈状态。
 
 ## 首次安装提示
 
-首次使用或环境检查发现缺少凭据时，先向用户说明：本工作流会在本地准备可上传音频，使用 OkFile 生成临时链接，再由阿里 Fun-ASR 产生词级时间戳；随后固定使用 `qwen-mt-plus` 完成分段翻译，最后由当前 Agent 做对齐、术语修复、QA 和 ASS/SRT 导出。
+首次使用或环境检查发现缺少凭据时，先向用户说明：本工作流会在本地准备可上传音频，使用 OkFile 生成临时链接，再由阿里 Fun-ASR 产生词级时间戳；随后固定使用 `qwen-mt-plus` 完成逐段初译，由当前 Agent 通读全文后进行语义重分段、翻译复核和最终全文 QC，再完成对齐、术语修复和 ASS/SRT 导出。
 
 - 编排推荐：在 Codex/Cursor 等 Coding Agent 中使用 GPT-5.5 级模型，负责长任务调度、时间轴对齐、QA 修复与交付总结；在 WorkBuddy 中推荐 DeepSeek V4 Pro。它们不替换转写或翻译模型。
 - 转写固定为阿里 Fun-ASR，因为它支持长音频任务和词级时间戳，这是字幕精确对齐的基础。
-- 分段翻译固定为阿里 `qwen-mt-plus`，因为它与当前术语规则、缓存恢复和串行稳定性策略匹配。
+- 初译固定为阿里 `qwen-mt-plus`，因为它与当前术语规则、缓存恢复和串行稳定性策略匹配；它不是全文语义审校的最终权威。
 - 本机需要 `DASHSCOPE_API_KEY`、`ALIYUN_WORKSPACE_ID`、`OKFILE_TOKEN`。环境缺失时，先说明用途并询问用户是否同意创建并打开本机 `.env`；只有得到明确同意后才执行 `bash scripts/open_env_setup.sh --open`。不得让用户在聊天中发送密钥。
 - 想了解完整细节时，查看 [视频翻译工作流说明书](../../docs/video-translate/视频翻译工作流说明书.md)。
 
@@ -66,9 +66,11 @@ Keep this production stack fixed unless the user explicitly requests an engineer
 1. Reuse an audio input from the media project `.work/input/`, a supplied audio input, or a same-basename audio-only download; otherwise extract compact audio locally with `ffmpeg`.
 2. Upload through OkFile and submit the resulting URL to Alibaba Fun-ASR in every production path, including when an original-language subtitle exists.
 3. Use Fun-ASR words and word timestamps as the alignment source of truth. If `.work/input/` contains one original-language SRT/VTT, map it to ASR segments by time overlap and use it only to correct `SRC_DISPLAY` and translation source text; never replace `SRC_RAW` or invent word timestamps from subtitle cues.
-4. Generate corrected and translated `segments.txt` with `qwen-mt-plus`.
-5. Repair terms, validate `SRC_RAW`, align timestamps, run auto-fixes and final QA, then export exactly one bilingual ASS and one bilingual SRT. Do not create Chinese-only, source-only, or platform-named subtitle variants.
-6. After successful export, remove downloader-created audio and original-language subtitle files under `.work/input/`. Never delete media or subtitle files outside that exact hidden input directory.
+4. Generate initial corrected translations with `qwen-mt-plus`. These are draft segments, not final semantic segmentation.
+5. The current orchestrator must read every generated semantic-review section before editing, build one whole-video outline/terminology/entity/style context, and review every target section. Re-segment by meaning first; apply length and duration limits only as display guardrails after semantic understanding.
+6. Validate exact `SRC_RAW` coverage and hashed section receipts, run deterministic term/alignment/visual QA, then require the orchestrator to read every final-QC section and pass all whole-document consistency checks.
+7. Export exactly one bilingual ASS and one bilingual SRT only after both global gates pass. Do not create Chinese-only, source-only, or platform-named subtitle variants.
+8. After successful export, remove downloader-created audio and original-language subtitle files under `.work/input/`. Never delete media or subtitle files outside that exact hidden input directory.
 
 Do not silently switch ASR providers, use local Whisper, add fallback model paths, install system tools, or reveal secrets.
 
@@ -109,10 +111,12 @@ Add `--outputs-dir "<project-path>"` after the user confirms the media project f
 
 In a combined workflow, the hidden `.work/input/` audio and source subtitle are discovered automatically. Use `--source-subtitle "/absolute/path/reference.srt"` only when the reference is outside the standard project layout. Use `--keep-workflow-inputs` only for explicit debugging; normal successful delivery removes those temporary inputs.
 
-When a run fails, use `workflow_status.json`, `final_qa_report.md`, `final_qa_prompt.txt`, and `python scripts/check_env.py --json`. Repair `segments.txt` automatically before asking the user; ask only after two failed repair attempts or when domain judgment is necessary. Reuse the same `--run-id` for retries.
+The wrapper intentionally pauses with exit code `3` for mandatory whole-document semantic review and exit code `4` for mandatory whole-document final QC. This is an Agent handoff, not a user error: follow the generated `global_review/*/WORKFLOW.md`, read every listed section in order, write reviewed files and hash-bound receipts, then rerun with the same `--run-id`. Do not ask the user to perform these review steps.
+
+For other failures, use `workflow_status.json`, `final_qa_report.md`, `final_qa_prompt.txt`, and `python scripts/check_env.py --json`. Repair the affected semantic-review section files automatically before asking the user; ask only after two failed repair attempts or when domain judgment is necessary.
 
 ## Delivery Rules
 
-Do not export when QA has blockers. In every SRT cue, place Chinese and source text on separate physical lines; never write literal `/n`, `\\n`, `\\N`, `<br>`, or ASS tags into SRT text. Keep the existing output basename and deliver only the matching `.ass` and `.srt` files. After success, report the ASS path, SRT path, elapsed time, models used, QA blocker/warning counts, and any focused spot-check recommendation.
+Do not export unless semantic review, deterministic QA, and final whole-document QC all pass. In every SRT cue, place Chinese and source text on separate physical lines; never write literal `/n`, `\\n`, `\\N`, `<br>`, or ASS tags into SRT text. Keep the existing output basename and deliver only the matching `.ass` and `.srt` files. After success, report the ASS path, SRT path, elapsed time, models used, QA blocker/warning counts, and any focused spot-check recommendation.
 
 The repository-level product guide is outside the installable skill package. Do not treat product documentation as the execution contract.

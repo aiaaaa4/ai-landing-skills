@@ -739,12 +739,8 @@ def write_run_summary(
     print("\n" + summary_text, flush=True)
 
 
-def finalize_subtitles(
+def run_deterministic_qa(
     work_dir: Path,
-    subtitles_dir: Path,
-    outputs_dir: Path,
-    output_base: str,
-    source_first: bool,
     domain_name: str,
     glossary: Path,
     term_rules: Path,
@@ -817,10 +813,22 @@ def finalize_subtitles(
         print("Final QA found blockers that need AI review; subtitles were NOT exported.", flush=True)
         print(f"- Report: {work_dir / 'final_qa_report.md'}", flush=True)
         print(f"- AI repair prompt: {work_dir / 'final_qa_prompt.txt'}", flush=True)
-        print("AI runner: apply final_qa_prompt.txt to repair segments.txt, then rerun this command.", flush=True)
+        print(
+            "AI runner: use final_qa_prompt.txt to revise the affected files under "
+            "global_review/semantic/reviewed/, refresh their receipt hashes, then rerun this command.",
+            flush=True,
+        )
         print("Ask the user only if the same blocker remains after two AI repair attempts or the fix needs domain judgment.", flush=True)
         raise SystemExit(1)
 
+def export_subtitle_files(
+    work_dir: Path,
+    subtitles_dir: Path,
+    outputs_dir: Path,
+    output_base: str,
+    source_first: bool,
+) -> None:
+    aligned = work_dir / "aligned_segments.json"
     export_cmd = [
         sys.executable,
         "scripts/export_subtitles.py",
@@ -840,6 +848,106 @@ def finalize_subtitles(
         target = outputs_dir / f"{output_base}.{ext}"
         shutil.copyfile(source, target)
         print(f"Wrote output: {target}", flush=True)
+
+
+def semantic_review_gate(work_dir: Path) -> bool:
+    segments = work_dir / "segments.txt"
+    initial_segments = work_dir / "segments.initial.txt"
+    semantic_dir = work_dir / "global_review" / "semantic"
+    if not initial_segments.exists():
+        shutil.copyfile(segments, initial_segments)
+    run_step(
+        [
+            sys.executable,
+            "scripts/global_review.py",
+            "prepare-semantic",
+            "--segments",
+            str(initial_segments),
+            "--word-table",
+            str(work_dir / "word_table.json"),
+            "--out-dir",
+            str(semantic_dir),
+        ]
+    )
+    receipt = semantic_dir / "semantic-review-receipt.json"
+    if not receipt.exists():
+        print("", flush=True)
+        print("Mandatory whole-document semantic review is required before deterministic QA.", flush=True)
+        print(f"- Follow the procedure in: {semantic_dir / 'WORKFLOW.md'}", flush=True)
+        print(f"- Read every section listed in: {semantic_dir / 'manifest.json'}", flush=True)
+        print(f"- Build global context from: {semantic_dir / 'semantic-review-receipt.template.json'}", flush=True)
+        print(f"- Write reviewed target sections under: {semantic_dir / 'reviewed'}", flush=True)
+        print(f"- Save the completed receipt as: {receipt}", flush=True)
+        print("- Rerun with the same --run-id after the orchestrator has reviewed every section.", flush=True)
+        return False
+    reviewed_segments = semantic_dir / "segments.global-reviewed.txt"
+    status = run_step_status(
+        [
+            sys.executable,
+            "scripts/global_review.py",
+            "validate-semantic",
+            "--manifest",
+            str(semantic_dir / "manifest.json"),
+            "--receipt",
+            str(receipt),
+            "--reviewed-dir",
+            str(semantic_dir / "reviewed"),
+            "--out",
+            str(reviewed_segments),
+        ]
+    )
+    if status != 0:
+        print("Semantic review validation failed; no subtitles will be exported.", flush=True)
+        return False
+    shutil.copyfile(reviewed_segments, segments)
+    return True
+
+
+def final_qc_gate(work_dir: Path) -> bool:
+    qc_dir = work_dir / "global_review" / "final-qc"
+    global_context = work_dir / "global_review" / "semantic" / "global-context.json"
+    run_step(
+        [
+            sys.executable,
+            "scripts/global_review.py",
+            "prepare-qc",
+            "--segments",
+            str(work_dir / "segments.txt"),
+            "--qa-report",
+            str(work_dir / "final_qa_report.md"),
+            "--global-context",
+            str(global_context),
+            "--out-dir",
+            str(qc_dir),
+        ]
+    )
+    receipt = qc_dir / "final-qc-receipt.json"
+    if not receipt.exists():
+        print("", flush=True)
+        print("Mandatory whole-document final consistency QC is required before export.", flush=True)
+        print(f"- Follow the procedure in: {qc_dir / 'WORKFLOW.md'}", flush=True)
+        print(f"- Read the global context: {global_context}", flush=True)
+        print(f"- Read the deterministic QA report: {work_dir / 'final_qa_report.md'}", flush=True)
+        print(f"- Read every section listed in: {qc_dir / 'manifest.json'}", flush=True)
+        print(f"- Complete: {qc_dir / 'final-qc-receipt.template.json'}", flush=True)
+        print(f"- Save the completed receipt as: {receipt}", flush=True)
+        print("- If changes are needed, revise semantic review outputs and rerun from that gate.", flush=True)
+        return False
+    status = run_step_status(
+        [
+            sys.executable,
+            "scripts/global_review.py",
+            "validate-qc",
+            "--manifest",
+            str(qc_dir / "manifest.json"),
+            "--receipt",
+            str(receipt),
+        ]
+    )
+    if status != 0:
+        print("Final whole-document QC validation failed; no subtitles will be exported.", flush=True)
+        return False
+    return True
 
 
 
@@ -934,20 +1042,40 @@ def main() -> int:
     )
     record_step_status(work_dir, "ai_segments", "done", "segments.txt ready")
 
-    record_step_status(work_dir, "export", "running")
+    record_step_status(work_dir, "semantic_review", "running", "mandatory whole-document orchestrator review")
     step_started = time.monotonic()
-    finalize_subtitles(
+    if not semantic_review_gate(work_dir):
+        record_step_timing(work_dir, "semantic_review", time.monotonic() - step_started, "waiting for orchestrator review")
+        record_step_status(work_dir, "semantic_review", "waiting", "complete all semantic review sections and receipt")
+        return 3
+    record_step_timing(work_dir, "semantic_review", time.monotonic() - step_started, "validated full-document semantic review")
+    record_step_status(work_dir, "semantic_review", "done")
+
+    record_step_status(work_dir, "deterministic_qa", "running")
+    step_started = time.monotonic()
+    run_deterministic_qa(
         work_dir,
-        subtitles_dir,
-        outputs_dir,
-        output_base,
-        args.source_first,
         args.domain_name,
         args.glossary,
         args.term_rules,
         args.disable_domain_term_checks,
     )
-    record_step_timing(work_dir, "export", time.monotonic() - step_started, "term repair, validation, alignment, auto-fix, QA, subtitle export")
+    record_step_timing(work_dir, "deterministic_qa", time.monotonic() - step_started, "term repair, validation, alignment, auto-fix, QA")
+    record_step_status(work_dir, "deterministic_qa", "done")
+
+    record_step_status(work_dir, "global_qc", "running", "mandatory whole-document consistency QC")
+    step_started = time.monotonic()
+    if not final_qc_gate(work_dir):
+        record_step_timing(work_dir, "global_qc", time.monotonic() - step_started, "waiting for orchestrator QC")
+        record_step_status(work_dir, "global_qc", "waiting", "complete final QC receipt")
+        return 4
+    record_step_timing(work_dir, "global_qc", time.monotonic() - step_started, "validated full-document final QC")
+    record_step_status(work_dir, "global_qc", "done")
+
+    record_step_status(work_dir, "export", "running")
+    step_started = time.monotonic()
+    export_subtitle_files(work_dir, subtitles_dir, outputs_dir, output_base, args.source_first)
+    record_step_timing(work_dir, "export", time.monotonic() - step_started, "ASS/SRT export after both global gates")
     elapsed = time.monotonic() - started_at
     orchestrator_model = model_name_from_env(args.orchestrator_model)
     translation_model = args.translation_model or "qwen-mt-plus"

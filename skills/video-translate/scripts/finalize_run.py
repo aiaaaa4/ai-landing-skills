@@ -9,9 +9,12 @@ from video_to_subtitles import (
     DEFAULT_GLOSSARY,
     DEFAULT_TERM_RULES,
     default_outputs_dir,
+    export_subtitle_files,
+    final_qc_gate,
     model_name_from_env,
     record_step_timing,
-    finalize_subtitles,
+    run_deterministic_qa,
+    semantic_review_gate,
     write_run_summary,
 )
 
@@ -49,17 +52,18 @@ def main() -> int:
         raise FileNotFoundError(f"Missing {work_dir / 'word_table.json'}")
 
     step_started = time.monotonic()
-    finalize_subtitles(
+    if not semantic_review_gate(work_dir):
+        return 3
+    run_deterministic_qa(
         work_dir,
-        subtitles_dir,
-        outputs_dir,
-        args.output_base,
-        args.source_first,
         args.domain_name,
         args.glossary,
         args.term_rules,
         args.disable_domain_term_checks,
     )
+    if not final_qc_gate(work_dir):
+        return 4
+    export_subtitle_files(work_dir, subtitles_dir, outputs_dir, args.output_base, args.source_first)
     record_step_timing(work_dir, "export", time.monotonic() - step_started, "finalize existing run")
     elapsed = time.monotonic() - started_at
     media = args.media.expanduser().resolve() if args.media else Path("unknown")

@@ -39,14 +39,14 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.4.0 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.4.1 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
-面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，结合 AI 语义分段、术语修复和自动质检，输出中文字幕在上、原文在下的 ASS/SRT。
+面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，由翻译模型完成稳定初译，再由编排模型通读全片、理解上下文、语义重分段，并通过确定性 QA 与最终全文一致性 QC 后输出 ASS/SRT。
 
 - 适合英语、法语、西班牙语、意大利语等本地视频翻译为中文。
-- 固定生产链路：Fun-ASR 词级转写、`qwen-mt-plus` 翻译分段、术语修复和 QA。即使已有原字幕也仍执行 ASR；原字幕只校正识别内容，词级时间戳始终以 ASR 为准。
+- 固定生产链路：Fun-ASR 词级转写、`qwen-mt-plus` 初译、编排模型全文语义审校、术语与时间轴 QA、编排模型最终全文 QC。即使已有原字幕也仍执行 ASR；原字幕只校正识别内容，词级时间戳始终以 ASR 为准。
 - 支持重要 PPT、图表、UI、代码或屏幕文字的上下文处理，并为长视频持续反馈进度。
-- [查看完整工作流说明](docs/video-translate/README.md)。
+- [查看完整工作流说明](docs/video-translate/视频翻译工作流说明书.md)。
 
 ### [极简视频封装](skills/video-publish)
 
