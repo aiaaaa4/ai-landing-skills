@@ -17,11 +17,10 @@ from common import normalize_word
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL = "auto"
 DEFAULT_PREFERRED_HELPER_MODEL = "qwen-mt-plus"
-DEFAULT_FALLBACK_MODEL = ""
-GENERAL_CHAT_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"  # Not used by qwen-mt-*; qwen-mt uses workspace URL from qwen_mt_chat_url(env).
 QWEN_MT_PREFIX = "qwen-mt-"
 QWEN_MT_TARGET_LANG = "Chinese"
 ALIYUN_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$", re.IGNORECASE)
+ALLOWED_ALIYUN_REGIONS = {"cn-beijing"}
 QWEN_MT_SOURCE_LANG_MAP = {
     "english": "English",
     "en": "English",
@@ -63,15 +62,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
+        choices=[DEFAULT_MODEL, DEFAULT_PREFERRED_HELPER_MODEL],
         help=(
-            "DashScope helper model id. Use 'auto' for the fixed production helper model qwen-mt-plus. "
-            "Override only for controlled internal tests."
+            "Fixed translation model. Both 'auto' and 'qwen-mt-plus' resolve to qwen-mt-plus."
         ),
-    )
-    parser.add_argument(
-        "--fallback-model",
-        default=None,
-        help="Optional fallback model for controlled tests. Production default is no fallback because helper is fixed to qwen-mt-plus.",
     )
     parser.add_argument("--source-language-name", default="source-language")
     parser.add_argument("--domain-name", default="finance/trading training videos")
@@ -108,10 +102,10 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
-def resolve_helper_model(requested: str, env: dict[str, str], fallback_model: str) -> tuple[str, str]:
+def resolve_helper_model(requested: str) -> tuple[str, str]:
     requested = (requested or "").strip()
-    if requested and requested.lower() != "auto":
-        return requested, "--model"
+    if requested not in {DEFAULT_MODEL, DEFAULT_PREFERRED_HELPER_MODEL}:
+        raise RuntimeError("Only the fixed qwen-mt-plus translation model is allowed.")
     return DEFAULT_PREFERRED_HELPER_MODEL, "fixed-default"
 
 
@@ -234,9 +228,18 @@ def qwen_mt_chat_url(env: dict[str, str]) -> str:
         raise RuntimeError("ALIYUN_WORKSPACE_ID is required when using qwen-mt-plus helper.")
     if not ALIYUN_IDENTIFIER_RE.fullmatch(workspace_id):
         raise RuntimeError("ALIYUN_WORKSPACE_ID must contain only letters, digits, and hyphens.")
-    if not ALIYUN_IDENTIFIER_RE.fullmatch(region):
-        raise RuntimeError("ALIYUN_REGION must contain only letters, digits, and hyphens.")
+    if region not in ALLOWED_ALIYUN_REGIONS:
+        raise RuntimeError("ALIYUN_REGION must be cn-beijing for this fixed production workflow.")
     return f"https://{workspace_id}.{region}.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
+
+
+def untrusted_source_text(value: str) -> str:
+    cleaned = "".join(character for character in value if character in "\n\t" or ord(character) >= 32).strip()
+    if not cleaned:
+        raise RuntimeError("Translation source text is empty after control-character filtering.")
+    if len(cleaned) > 4_000:
+        raise RuntimeError("Translation source text exceeds the per-segment safety limit.")
+    return cleaned
 
 
 def qwen_mt_source_lang(source_language_name: str) -> str:
@@ -256,68 +259,6 @@ def retry_delay_seconds(exc: Exception, attempt: int) -> float:
     return min(120.0, 10.0 * (2 ** (attempt - 1)))
 
 
-def dashscope_translate(
-    api_key: str,
-    model: str,
-    batch: list[SegmentChunk],
-    max_retries: int,
-    source_language_name: str,
-    domain_name: str,
-    screen_context: str = "",
-) -> dict[str, str]:
-    system = (
-        f"You translate {source_language_name} subtitles into natural Mainland Chinese for {domain_name}. "
-        "Use professional but colloquial terminology for the domain. For trading videos, keep terms like "
-        "footprint, delta, imbalance, book, cash session, POC, value area, long/short when they are common. "
-        "If screen context is provided, use it only to repair visible terms, tickers, UI labels, and screen references; "
-        "do not add screen text that is not supported by the source subtitle. Return valid JSON only."
-    )
-    items = [{"id": item.key, "source": item.source_display} for item in batch]
-    context_block = ""
-    if screen_context.strip():
-        context_block = "Screen context for visible terms and scene references:\n" + screen_context.strip() + "\n\n"
-    user = (
-        f"Translate each {source_language_name} source subtitle into concise Chinese for video subtitles. "
-        "Do not explain. Keep the same ids. Return exactly a JSON array like "
-        '[{"id":"S0001_P01","zh":"中文"}].\n\n'
-        + context_block
-        + json.dumps(items, ensure_ascii=False)
-    )
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "temperature": 0.2,
-    }
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(
-        GENERAL_CHAT_URL,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    last_error: Exception | None = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                data = json.loads(response.read().decode("utf-8"))
-            content = data["choices"][0]["message"]["content"]
-            translated = extract_json_array(content)
-            return {str(item["id"]): str(item["zh"]).strip() for item in translated if item.get("id")}
-        except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
-            last_error = exc
-            if attempt < max_retries:
-                wait = retry_delay_seconds(exc, attempt)
-                print(f"DashScope request failed ({exc}); retrying in {wait:.0f}s ({attempt}/{max_retries})...", flush=True)
-                time.sleep(wait)
-    raise RuntimeError(f"DashScope translation failed after {max_retries} attempts: {last_error}")
-
-
 def dashscope_translate_qwen_mt(
     api_key: str,
     env: dict[str, str],
@@ -326,10 +267,11 @@ def dashscope_translate_qwen_mt(
     max_retries: int,
     source_language_name: str,
 ) -> dict[str, str]:
-    # Qwen-MT rejects system messages; keep the request to user/assistant roles only.
+    # Qwen-MT rejects system messages. The source is untrusted media data and is
+    # accepted only as the translation model's source text, never as tool input.
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": item.source_display}],
+        "messages": [{"role": "user", "content": untrusted_source_text(item.source_display)}],
         "translation_options": {
             "source_lang": qwen_mt_source_lang(source_language_name),
             "target_lang": QWEN_MT_TARGET_LANG,
@@ -391,7 +333,6 @@ def translate_pending(
     api_key: str,
     env: dict[str, str],
     model: str,
-    fallback_model: str,
     pending: list[SegmentChunk],
     translations: dict[str, str],
     cache: Path | None,
@@ -423,50 +364,30 @@ def translate_pending(
 
     def run_model(used_model: str, batch: list[SegmentChunk]) -> dict[str, str]:
         nonlocal last_qwen_mt_request_at
-        if is_qwen_mt_model(used_model):
-            result: dict[str, str] = {}
-            for item in batch:
-                if last_qwen_mt_request_at is not None:
-                    remaining = qwen_mt_min_interval_seconds - (time.monotonic() - last_qwen_mt_request_at)
-                    if remaining > 0:
-                        time.sleep(remaining)
-                last_qwen_mt_request_at = time.monotonic()
-                result.update(
-                    dashscope_translate_qwen_mt(
-                        api_key,
-                        env,
-                        used_model,
-                        item,
-                        max_retries,
-                        source_language_name,
-                    )
+        if not is_qwen_mt_model(used_model):
+            raise RuntimeError("Only qwen-mt-plus is allowed for subtitle translation.")
+        result: dict[str, str] = {}
+        for item in batch:
+            if last_qwen_mt_request_at is not None:
+                remaining = qwen_mt_min_interval_seconds - (time.monotonic() - last_qwen_mt_request_at)
+                if remaining > 0:
+                    time.sleep(remaining)
+            last_qwen_mt_request_at = time.monotonic()
+            result.update(
+                dashscope_translate_qwen_mt(
+                    api_key,
+                    env,
+                    used_model,
+                    item,
+                    max_retries,
+                    source_language_name,
                 )
-            return result
-        return dashscope_translate(
-            api_key,
-            used_model,
-            batch,
-            max_retries,
-            source_language_name,
-            domain_name,
-            screen_context,
-        )
+            )
+        return result
 
     def translate_one(batch_index: int, batch: list[SegmentChunk]) -> tuple[int, dict[str, str]]:
         used_model = model
-        try:
-            result = run_model(used_model, batch)
-        except RuntimeError as exc:
-            if fallback_model and fallback_model != used_model:
-                print(
-                    f"Batch {batch_index} failed with helper model {used_model}; "
-                    f"retrying with fallback model {fallback_model}: {exc}",
-                    flush=True,
-                )
-                used_model = fallback_model
-                result = run_model(used_model, batch)
-            else:
-                raise
+        result = run_model(used_model, batch)
         missing = [item.key for item in batch if item.key not in result]
         if missing:
             print(
@@ -558,14 +479,11 @@ def main() -> int:
     api_key = env.get("DASHSCOPE_API_KEY")
     if not api_key:
         raise SystemExit("DASHSCOPE_API_KEY is missing.")
-    fallback_model = (args.fallback_model or DEFAULT_FALLBACK_MODEL).strip()
-    model, model_source = resolve_helper_model(args.model, env, fallback_model)
+    model, model_source = resolve_helper_model(args.model)
     if model_source == "fixed-default":
         print(f"Helper model: {model} (fixed production helper).", flush=True)
     else:
         print(f"Helper model: {model} (from {model_source})", flush=True)
-    if fallback_model and fallback_model != model:
-        print(f"Fallback helper model: {fallback_model}", flush=True)
 
     transcript = json.loads(args.transcript_words.read_text(encoding="utf-8"))
     chunks = build_chunks(transcript, args.max_display_tokens)
@@ -581,7 +499,6 @@ def main() -> int:
         api_key=api_key,
         env=env,
         model=model,
-        fallback_model=fallback_model,
         pending=pending,
         translations=translations,
         cache=args.cache,
@@ -600,7 +517,7 @@ def main() -> int:
         "path": "helper_dashscope",
         "model": model,
         "model_source": model_source,
-        "fallback_model": fallback_model,
+        "fallback_model": "",
         "chunks": len(chunks),
         "cache": str(args.cache) if args.cache else "",
         "batch_size": args.batch_size,

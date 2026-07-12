@@ -59,7 +59,10 @@ def require_ffmpeg(required_filters: set[str]) -> tuple[str, str]:
         )
         missing = sorted(name for name in required_filters if name not in result.stdout)
         if missing:
-            raise RuntimeError(f"FFmpeg is missing required filters: {', '.join(missing)}. Run python scripts/check_ffmpeg.py --install.")
+            raise RuntimeError(
+                f"FFmpeg is missing required filters: {', '.join(missing)}. "
+                "Install a compatible FFmpeg build manually, then rerun the environment check."
+            )
     return ffmpeg, ffprobe
 
 

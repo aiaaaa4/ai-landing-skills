@@ -60,7 +60,6 @@ def authenticate() -> None:
 
 def publish_command(item: dict, repository: dict, changelog: str, dry_run: bool) -> list[str]:
     clawhub = item["clawhub"]
-    publish_slug = clawhub.get("slug", item["slug"])
     command = [
         "npx",
         "--yes",
@@ -71,7 +70,7 @@ def publish_command(item: dict, repository: dict, changelog: str, dry_run: bool)
         "--owner",
         repository["owner"],
         "--slug",
-        publish_slug,
+        item["slug"],
         "--name",
         item["display_name"],
         "--version",

@@ -32,6 +32,7 @@ AUDIO_SUFFIXES = {".m4a", ".mp3", ".aac", ".wav", ".flac", ".ogg", ".opus"}
 OKFILE_UPLOAD_URL = "https://www.okfile.com/api/upload/quick"
 OKFILE_ORIGIN = "https://www.okfile.com"
 IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,127}$", re.IGNORECASE)
+ALLOWED_ALIYUN_REGIONS = {"cn-beijing"}
 
 
 def api_retry_attempts() -> int:
@@ -213,8 +214,8 @@ def require_https_url(url: str, label: str) -> None:
 def validated_aliyun_base_url(workspace_id: str, region: str) -> str:
     if not IDENTIFIER_RE.fullmatch(workspace_id):
         raise RuntimeError("ALIYUN_WORKSPACE_ID must contain only letters, digits, and hyphens.")
-    if not IDENTIFIER_RE.fullmatch(region):
-        raise RuntimeError("ALIYUN_REGION must contain only letters, digits, and hyphens.")
+    if region not in ALLOWED_ALIYUN_REGIONS:
+        raise RuntimeError("ALIYUN_REGION must be cn-beijing for this fixed production workflow.")
     return f"https://{workspace_id}.{region}.maas.aliyuncs.com"
 
 

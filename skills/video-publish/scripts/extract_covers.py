@@ -6,6 +6,7 @@ import json
 import random
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -103,5 +104,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except RuntimeError as error:
-        print(f"video-publish: {error}", file=__import__("sys").stderr)
+        print(f"video-publish: {error}", file=sys.stderr)
         raise SystemExit(2)
