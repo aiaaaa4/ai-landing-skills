@@ -31,7 +31,7 @@
       "skill_id": "aiaaaa4.video-translate",
       "display_name": "人工级视频字幕翻译",
       "path": "skills/video-translate",
-      "version": "1.3.8",
+      "version": "1.3.9",
       "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-translate",
@@ -44,7 +44,7 @@
       "skill_id": "aiaaaa4.video-publish",
       "display_name": "极简视频封装",
       "path": "skills/video-publish",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
       "clawhub": {
         "package": "@aiaaaa4/video-publish",

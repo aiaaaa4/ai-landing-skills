@@ -38,7 +38,7 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.3.8 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.3.9 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，结合 AI 语义分段、术语修复和自动质检，输出中文字幕在上、原文在下的 ASS/SRT。
 
@@ -49,9 +49,9 @@
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.5 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
+**`aiaaaa4.video-publish` · v1.0.6 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
 
-为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，并在视频开头轻量添加 3 秒固定免责声明，默认不重新编码视频主体。
+为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒固定免责声明，并可按成片正文的实际起点生成时间轴匹配的发布版 SRT；默认不重新编码视频主体。
 
 - 封面保存为 `抽帧封面1.png` 至 `抽帧封面5.png`，不再拼进视频；字幕烧录、水印和其他完整重编码功能保留为高级模式。
 - 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。

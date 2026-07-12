@@ -50,6 +50,12 @@ def srt_text(segments: list[dict], source_first: bool, zh_chars_per_line: float)
     return "\n".join(blocks)
 
 
+def srt_bytes(segments: list[dict], source_first: bool, zh_chars_per_line: float) -> bytes:
+    """Encode standard multiline SubRip cues with CRLF line endings."""
+    text = srt_text(segments, source_first, zh_chars_per_line)
+    return text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+
+
 def ass_text(segments: list[dict], source_first: bool, zh_chars_per_line: float) -> str:
     events = []
     for segment in segments:
@@ -77,7 +83,7 @@ def main() -> int:
 
     srt_path = args.out_dir / f"{args.basename}.srt"
     ass_path = args.out_dir / f"{args.basename}.ass"
-    srt_path.write_text(srt_text(segments, args.source_first, args.zh_chars_per_line), encoding="utf-8")
+    srt_path.write_bytes(srt_bytes(segments, args.source_first, args.zh_chars_per_line))
     ass_path.write_text(ass_text(segments, args.source_first, args.zh_chars_per_line), encoding="utf-8")
     print(f"Wrote {srt_path}")
     print(f"Wrote {ass_path}")

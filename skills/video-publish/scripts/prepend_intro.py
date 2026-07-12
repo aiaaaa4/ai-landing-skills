@@ -10,6 +10,8 @@ import tempfile
 from fractions import Fraction
 from pathlib import Path
 
+from subtitle_timeline import default_subtitle_output, shift_srt_file
+
 
 DEFAULT_DISCLAIMER = Path(__file__).resolve().parents[1] / "assets" / "disclaimer-zh-en-1920x1080.png"
 
@@ -19,6 +21,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("input", type=Path, help="Source MP4 video.")
     parser.add_argument("--disclaimer-image", type=Path, default=DEFAULT_DISCLAIMER, help="Disclaimer image, defaults to the bundled asset.")
     parser.add_argument("--output", type=Path, required=True, help="Output MP4 path.")
+    parser.add_argument("--subtitle", type=Path, default=None, help="Optional source-timeline bilingual SRT to shift for the packaged video.")
+    parser.add_argument("--subtitle-output", type=Path, default=None, help="Optional shifted SRT path; defaults to the packaged-video naming rule.")
+    parser.add_argument("--timeline-output", type=Path, default=None, help="Optional timeline manifest path; defaults beside the packaged video.")
     parser.add_argument("--disclaimer-seconds", type=float, default=3.0, help="Disclaimer duration, default 3 seconds.")
     parser.add_argument("--preview-content-seconds", type=float, default=None, help="Copy only this many seconds of source content for a preview.")
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing output file.")
@@ -69,21 +74,117 @@ def probe_media(ffprobe: str, source: Path) -> dict[str, object]:
     return {"video": video, "audio": audio}
 
 
-def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path | None, Path, Path | None]:
     source = resolve_file(args.input, "Source video")
     disclaimer = resolve_file(args.disclaimer_image, "Disclaimer image")
     output = args.output.expanduser().resolve()
+    subtitle = resolve_file(args.subtitle, "Subtitle") if args.subtitle else None
+    if subtitle and subtitle.suffix.lower() != ".srt":
+        raise RuntimeError("Lightweight subtitle delivery currently supports SRT only.")
+    if args.subtitle_output and not subtitle:
+        raise RuntimeError("--subtitle-output requires --subtitle.")
+    subtitle_output = (
+        args.subtitle_output.expanduser().resolve()
+        if args.subtitle_output
+        else default_subtitle_output(source, output, subtitle) if subtitle else None
+    )
+    timeline_output = (
+        args.timeline_output.expanduser().resolve()
+        if args.timeline_output
+        else output.with_suffix(".timeline.json")
+    )
+    paths = [source, disclaimer, output, timeline_output]
+    if subtitle:
+        paths.append(subtitle)
+    if subtitle_output:
+        paths.append(subtitle_output)
+    if len(paths) != len(set(paths)):
+        raise RuntimeError("Source, subtitle, disclaimer, video output, subtitle output, and timeline output must use distinct paths.")
     if source == output:
         raise RuntimeError("Output path must differ from the source video.")
     if output.suffix.lower() != ".mp4":
         raise RuntimeError("Output must use the .mp4 extension.")
+    if subtitle_output and subtitle_output.suffix.lower() != ".srt":
+        raise RuntimeError("Subtitle output must use the .srt extension.")
+    if timeline_output.suffix.lower() != ".json":
+        raise RuntimeError("Timeline output must use the .json extension.")
     if output.exists() and not args.overwrite:
         raise RuntimeError("Output already exists. Confirm replacement, then add --overwrite.")
+    for derived in (subtitle_output, timeline_output):
+        if derived and derived.exists() and not args.overwrite:
+            raise RuntimeError(f"Derived output already exists. Confirm replacement, then add --overwrite: {derived}")
     if not 0.5 <= args.disclaimer_seconds <= 10:
         raise RuntimeError("--disclaimer-seconds must be between 0.5 and 10 seconds.")
     if args.preview_content_seconds is not None and args.preview_content_seconds <= 0:
         raise RuntimeError("--preview-content-seconds must be greater than zero.")
-    return source, disclaimer, output
+    return source, disclaimer, output, subtitle, timeline_output, subtitle_output
+
+
+def transport_offset_seconds(media: dict[str, object], intro_seconds: float) -> float:
+    fps = float(Fraction(str(media["video"]["r_frame_rate"])))
+    # H.264 DTS can lead PTS by two frames. The source transport starts after
+    # that boundary guard, so companion subtitles must use the same offset.
+    return intro_seconds + (2 / fps) + (1 / 90_000)
+
+
+def probe_content_offset(ffprobe: str, intro: Path, output: Path, source: Path, intro_seconds: float) -> float:
+    count_result = subprocess.run(
+        [
+            ffprobe,
+            "-v",
+            "error",
+            "-count_frames",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=nb_read_frames",
+            "-of",
+            "json",
+            str(intro),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    streams = json.loads(count_result.stdout).get("streams", [])
+    if not streams or not streams[0].get("nb_read_frames"):
+        raise RuntimeError("Could not count disclaimer frames for subtitle alignment.")
+    intro_frame_count = int(streams[0]["nb_read_frames"])
+
+    def frame_timestamps(path: Path, interval_seconds: float) -> list[float]:
+        result = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-read_intervals",
+                f"0%+{interval_seconds:g}",
+                "-show_entries",
+                "frame=best_effort_timestamp_time",
+                "-of",
+                "json",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return [
+            float(frame["best_effort_timestamp_time"])
+            for frame in json.loads(result.stdout).get("frames", [])
+            if frame.get("best_effort_timestamp_time") is not None
+        ]
+
+    output_timestamps = frame_timestamps(output, intro_seconds + 2)
+    source_timestamps = frame_timestamps(source, 1)
+    if len(output_timestamps) <= intro_frame_count or not source_timestamps:
+        raise RuntimeError("Could not locate the source-video boundary for subtitle alignment.")
+    offset = output_timestamps[intro_frame_count] - source_timestamps[0]
+    if offset < 0:
+        raise RuntimeError("Detected a negative source-video offset; refusing to rewrite subtitles.")
+    return offset
 
 
 def build_intro_command(
@@ -186,10 +287,7 @@ def build_source_transport_command(
     intro_seconds: float,
     preview_content_seconds: float | None,
 ) -> list[str]:
-    fps = float(Fraction(str(media["video"]["r_frame_rate"])))
-    # H.264 DTS can lead PTS by two frames. Offset the source beyond the intro
-    # so the remuxer receives strictly increasing timestamps at the boundary.
-    timestamp_offset = intro_seconds + (2 / fps) + (1 / 90_000)
+    timestamp_offset = transport_offset_seconds(media, intro_seconds)
     command = [ffmpeg, "-hide_banner", "-i", str(source)]
     if preview_content_seconds is not None:
         command.extend(["-t", f"{preview_content_seconds:g}"])
@@ -268,11 +366,12 @@ def stream_transport_concat(intro: Path, source_command: list[str], mux_command:
 
 def main() -> int:
     args = parse_args()
-    source, disclaimer, output = validate_args(args)
+    source, disclaimer, output, subtitle, timeline_output, subtitle_output = validate_args(args)
     ffmpeg, ffprobe = require_tools()
     media = probe_media(ffprobe, source)
     output.parent.mkdir(parents=True, exist_ok=True)
     intro_seconds = args.disclaimer_seconds
+    transport_offset = transport_offset_seconds(media, intro_seconds)
     with tempfile.TemporaryDirectory(prefix="video-publish-intro-") as temp_dir:
         temp_path = Path(temp_dir)
         intro = temp_path / "intro.ts"
@@ -282,7 +381,15 @@ def main() -> int:
         if args.dry_run:
             print(
                 json.dumps(
-                    {"intro_command": intro_command, "source_command": source_command, "mux_command": mux_command},
+                    {
+                        "intro_command": intro_command,
+                        "source_command": source_command,
+                        "mux_command": mux_command,
+                        "estimated_content_offset_seconds": args.disclaimer_seconds,
+                        "transport_offset_seconds": transport_offset,
+                        "subtitle_output": str(subtitle_output) if subtitle_output else None,
+                        "timeline_output": str(timeline_output),
+                    },
                     ensure_ascii=False,
                     indent=2,
                 )
@@ -290,12 +397,38 @@ def main() -> int:
             return 0
         subprocess.run(intro_command, check=True)
         stream_transport_concat(intro, source_command, mux_command)
+        content_offset = probe_content_offset(ffprobe, intro, output, source, intro_seconds)
+    if subtitle and subtitle_output:
+        subtitle_output.parent.mkdir(parents=True, exist_ok=True)
+        shift_srt_file(subtitle, subtitle_output, content_offset)
+    timeline_output.parent.mkdir(parents=True, exist_ok=True)
+    timeline_output.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_video": str(source),
+                "packaged_video": str(output),
+                "source_subtitle": str(subtitle) if subtitle else None,
+                "packaged_subtitle": str(subtitle_output) if subtitle_output else None,
+                "disclaimer_seconds": args.disclaimer_seconds,
+                "content_offset_seconds": content_offset,
+                "source_video_reencoded": False,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     print(
         json.dumps(
             {
                 "output": str(output),
                 "disclaimer_image": str(disclaimer),
                 "disclaimer_seconds": args.disclaimer_seconds,
+                "content_offset_seconds": content_offset,
+                "subtitle_output": str(subtitle_output) if subtitle_output else None,
+                "timeline_output": str(timeline_output),
                 "source_video_reencoded": False,
                 "size_bytes": output.stat().st_size,
             },

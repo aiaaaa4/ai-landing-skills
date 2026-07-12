@@ -82,6 +82,16 @@ class PipelineScriptsTest(unittest.TestCase):
         self.assertIn("如果价格突破前一日高点", srt)
         # Soft trailing punctuation must be stripped in display text.
         self.assertNotIn("追涨。", srt)
+        first_block = srt.split("\n\n", 1)[0]
+        self.assertRegex(first_block, r"\n[^\n]*[\u4e00-\u9fff][^\n]*\n[^\n]*[A-Za-z]")
+        self.assertNotIn(r"\n", first_block)
+        raw_srt = (out_dir / "example.zh-en.srt").read_bytes()
+        self.assertIn(b"\r\n", raw_srt)
+        self.assertNotIn(b"\n", raw_srt.replace(b"\r\n", b""))
+        self.assertEqual(
+            sorted(path.suffix for path in out_dir.iterdir()),
+            [".ass", ".srt"],
+        )
 
         ass = (out_dir / "example.zh-en.ass").read_text(encoding="utf-8")
         self.assertIn("Style: Default,Arial,42,", ass)

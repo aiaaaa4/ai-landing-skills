@@ -67,7 +67,7 @@ Keep this production stack fixed unless the user explicitly requests an engineer
 2. Upload through OkFile and submit the resulting URL to Alibaba Fun-ASR.
 3. Use Fun-ASR word timestamps as the alignment source of truth.
 4. Generate `segments.txt` with `qwen-mt-plus`.
-5. Repair terms, validate `SRC_RAW`, align timestamps, run auto-fixes and final QA, then export ASS/SRT.
+5. Repair terms, validate `SRC_RAW`, align timestamps, run auto-fixes and final QA, then export exactly one bilingual ASS and one bilingual SRT. Do not create Chinese-only, source-only, or platform-named subtitle variants.
 
 Do not silently switch ASR providers, use local Whisper, add fallback model paths, install system tools, or reveal secrets.
 
@@ -110,6 +110,6 @@ When a run fails, use `workflow_status.json`, `final_qa_report.md`, `final_qa_pr
 
 ## Delivery Rules
 
-Do not export when QA has blockers. After success, report the ASS path, SRT path, elapsed time, models used, QA blocker/warning counts, and any focused spot-check recommendation.
+Do not export when QA has blockers. In every SRT cue, place Chinese and source text on separate physical lines; never write literal `/n`, `\\n`, `\\N`, `<br>`, or ASS tags into SRT text. Keep the existing output basename and deliver only the matching `.ass` and `.srt` files. After success, report the ASS path, SRT path, elapsed time, models used, QA blocker/warning counts, and any focused spot-check recommendation.
 
 The repository-level product guide is outside the installable skill package. Do not treat product documentation as the execution contract.

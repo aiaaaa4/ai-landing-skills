@@ -15,6 +15,7 @@ from prepend_intro import (  # noqa: E402
     build_intro_command,
     build_mux_command,
     build_source_transport_command,
+    transport_offset_seconds,
     parse_args,
     validate_args,
 )
@@ -55,7 +56,7 @@ class LightweightIntroTest(unittest.TestCase):
 
     def test_builds_short_intro_and_stream_copy_concat(self):
         args = self.parse("--disclaimer-seconds", "3", "--preview-content-seconds", "8")
-        source, disclaimer, output = validate_args(args)
+        source, disclaimer, output, subtitle, timeline_output, subtitle_output = validate_args(args)
         media = {
             "video": {
                 "width": 1920,
@@ -79,9 +80,48 @@ class LightweightIntroTest(unittest.TestCase):
         self.assertIn("aac_adtstoasc", mux_command)
         self.assertIn("+faststart", mux_command)
         self.assertEqual(source, self.source.resolve())
+        self.assertIsNone(subtitle)
+        self.assertIsNone(subtitle_output)
+        self.assertEqual(timeline_output, self.output.with_suffix(".timeline.json").resolve())
+
+    def test_calculates_transport_offset_from_actual_frame_rate(self):
+        media = {"video": {"r_frame_rate": "25/1"}}
+        self.assertAlmostEqual(transport_offset_seconds(media, 3), 3.080011111, places=8)
+
+    def test_derives_and_shifts_release_subtitle(self):
+        subtitle = self.root / "source.中英双语字幕.srt"
+        subtitle.write_text(
+            "1\n00:00:01,950 --> 00:00:03,100\n中文\nEnglish\n",
+            encoding="utf-8",
+        )
+        args = self.parse("--subtitle", str(subtitle))
+        source, _, output, resolved_subtitle, _, subtitle_output = validate_args(args)
+        self.assertEqual(resolved_subtitle, subtitle.resolve())
+        self.assertEqual(subtitle_output, (self.root / "output.中英双语字幕.srt").resolve())
+
+        from subtitle_timeline import shift_srt_file
+
+        shift_srt_file(resolved_subtitle, subtitle_output, 3.080011111)
+        shifted = subtitle_output.read_text(encoding="utf-8")
+        self.assertIn("00:00:05,030 --> 00:00:06,180", shifted)
+        self.assertIn("中文\nEnglish", shifted)
+        self.assertIn(b"\r\n", subtitle_output.read_bytes())
 
     def test_defaults_to_three_second_disclaimer(self):
         self.assertEqual(self.parse().disclaimer_seconds, 3.0)
+
+    def test_refuses_to_overwrite_source_subtitle(self):
+        subtitle = self.root / "source.srt"
+        subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nText\n", encoding="utf-8")
+        args = self.parse(
+            "--subtitle",
+            str(subtitle),
+            "--subtitle-output",
+            str(subtitle),
+            "--overwrite",
+        )
+        with self.assertRaisesRegex(RuntimeError, "distinct paths"):
+            validate_args(args)
 
 
 if __name__ == "__main__":
