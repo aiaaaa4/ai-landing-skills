@@ -13,11 +13,12 @@ Use this skill only when the user selects a local video file. Reject direct user
 3. Submit the URL to Alibaba Fun-ASR even when an original-language subtitle exists.
 4. Use Fun-ASR words and word timestamps as the alignment source of truth.
 5. If one original-language SRT/VTT exists under `.work/input/`, map it to ASR segments by temporal overlap and use sufficiently similar text to correct display/translation content without changing `SRC_RAW`.
-6. Create initial draft segments automatically with the fixed Alibaba `qwen-mt-plus` helper.
-7. Require the orchestrator to read all semantic-review sections, build one global context for the complete video, and review/re-segment every target range by meaning.
-8. Validate hashed full coverage, repair terms, align word timestamps, and run deterministic QA.
-9. Require a second orchestrator pass over all final-QC sections for whole-document consistency, then export SRT/ASS only when every check passes.
-10. After successful export, delete only the downloader-created audio and source subtitle under `.work/input/`.
+6. Before translation, require the orchestrator to read the complete source and create a validated per-video context with `domains`, `terms`, ambiguity decisions, entities, style rules, and `tm_list`.
+7. Call qwen-mt-plus with that context and bind its cache to the context SHA-256.
+8. Require the orchestrator to compare every draft translation against source/context, correct mistranslations, and re-segment by meaning.
+9. Validate coverage, repair terms, align timestamps, and run deterministic QA.
+10. Require final whole-document QC, then export SRT/ASS only when every check passes.
+11. After successful export, delete only downloader-created audio and source subtitles under `.work/input/`.
 
 Do not switch ASR providers, use local Whisper, or add backup paths unless the user explicitly asks.
 
@@ -27,8 +28,8 @@ Do not switch ASR providers, use local Whisper, or add backup paths unless the u
 Do not ask ordinary users to choose among many models. The production stack is fixed because it has been tested on real subtitle jobs and is more reliable than ad-hoc model switching.
 
 - ASR: Alibaba Bailian / DashScope `Fun-ASR`. It is required because the workflow depends on long-recorded-audio ASR and word-level timestamps.
-- Initial translation: Alibaba Bailian `qwen-mt-plus`, called by `scripts/generate_segments_with_dashscope.py`. It provides stable, cached draft translations in serial mode (`--concurrency 1`), but it does not establish the final whole-document segmentation or consistency judgment.
-- Orchestrator: if running in WorkBuddy, use DeepSeek V4 Pro. If running in Codex/Cursor or a coding-agent environment, recommend GPT 5.5-class models. The orchestrator must read every section of the complete transcript, build a global outline/terminology/entity/style context, perform semantic re-segmentation and translation review, then perform a separate whole-document final QC after deterministic checks. It also runs tools, keeps long tasks alive, exports subtitles, and returns the final summary.
+- Initial translation: Alibaba Bailian `qwen-mt-plus`, called only after validated whole-source analysis. Every request uses Qwen-MT `domains`, `terms`, and optional `tm_list`; cached translations are invalid when that context changes.
+- Orchestrator: in WorkBuddy use the selected capable orchestration model; in Codex/Cursor use a strong long-context model. It performs two distinct full reads: source-only analysis before qwen-mt-plus, then source-versus-draft retranslation and semantic segmentation after qwen-mt-plus. It also performs final QC and must keep long-running processes alive through foreground execution or polling.
 
 Do not switch ASR providers, use local Whisper, or add backup model paths unless the user explicitly asks for that engineering change and accepts revalidation. Groq Whisper or other providers must prove word-level timestamps before production use.
 
@@ -84,16 +85,18 @@ For non-finance domains, keep the pipeline but ask for or maintain a domain glos
 
 ## Before Running
 
+Run `python scripts/preflight.py` and send stdout verbatim. This script is the sole questionnaire authority. Do not paraphrase it or invent additional language/output choices. In the combined workflow, reuse the questionnaire already emitted by `video-download/scripts/preflight.py --mode combined`.
+
 First use message after environment check, in Chinese:
 
 ```text
-这套工作流会先在本地准备所选视频的音频，通过 OkFile 生成临时音频链接，再用阿里 Fun-ASR 做词级转写；随后固定调用阿里 qwen-mt-plus 生成逐段初译，由当前 AI agent 通读全片后完成语义重分段、翻译复核和最终全文一致性 QC，再做时间轴匹配、术语修复和 ASS/SRT 导出。音频会上传至 OkFile，临时链接会发送给阿里 Fun-ASR，字幕文本会发送给阿里 qwen-mt-plus；只有在你明确同意后才会开始外发。WorkBuddy 编排建议用 DeepSeek V4 Pro，Codex/Cursor 编排建议用 GPT 5.5 级模型。请准备 DASHSCOPE_API_KEY、ALIYUN_WORKSPACE_ID、OKFILE_TOKEN 并写入 .env，准备好后把本地视频路径发来即可。详细说明可看：视频翻译工作流说明书.md。
+这套工作流会先通过 OkFile 和 Fun-ASR 获取词级转写；当前编排模型会先通读完整源文，生成本视频专属领域提示、术语和翻译记忆，再交给 qwen-mt-plus 初译。初译后，编排模型会再次通读原文与译文，纠正词义、按语义重分段并完成最终 QC。默认翻译为简体中文，固定输出双语 ASS/SRT。音频和字幕文本只有在你明确同意外发处理后才会发送。
 ```
 
-Before starting each user-provided video, confirm only these points unless already clear:
+The fixed questionnaire covers these fields:
 
 1. Source language: default English (`--language en`). Common supported hints: French (`fr`), Spanish (`es`), Italian (`it`). If uncertain, infer and state the assumption.
-2. Target language: default Chinese. Current glossary, QA rules, subtitle style, and hotword policy are optimized for Chinese output. Other targets require target-specific rules before production quality is claimed.
+2. Target language: default Simplified Chinese. Bilingual ASS/SRT is the fixed output structure, not a competing target-language option.
 3. Screen context: ask whether the video contains dense or important visible text, PPT/slides, charts, software UI, code, signs, or meaningful images not fully spoken aloud. Keep it off by default; enabling it may increase time and cost.
 4. Subtitle output directory: default to the project-level `outputs/` directory. Ask the user to confirm this default; if they want a different location, ask for the absolute or project-relative path and pass it with `--outputs-dir "<path>"`.
 5. External-processing consent: before any command runs, state that the selected audio is uploaded only to `https://www.okfile.com`; its temporary URL is sent to Alibaba Fun-ASR; and subtitle text is sent to Alibaba qwen-mt-plus. Proceed only after an explicit affirmative answer.
@@ -158,17 +161,18 @@ If the user confirmed a custom subtitle export directory, add:
 --outputs-dir "/absolute/or/project-relative/output/folder"
 ```
 
-Optional screen context: if the user confirms important visible text, charts, slides, UI labels, code, signs, or screen-only terms, read `references/screen_context.md`. Use `ffmpeg` for local screenshot/contact-sheet generation. The same multimodal AI should inspect screenshots and create `runs/<run-id>/work/screen_context.txt` before `prompt.txt` is generated or regenerated. Do not use local OCR or bind this step to a specific model, platform, or operating system. Keep it off by default. Use 6-12 screenshots normally, 16 for 30-60 minute videos, and never exceed 20 screenshots without asking the user. If `screen_context.txt` exists, the workflow injects it into `prompt.txt` and passes it to the segment helper.
+Optional screen context: if the user confirms important visible text, read `references/screen_context.md`. Use `ffmpeg` for local screenshots. The same multimodal AI should write `<outputs-dir>/.work/<run-id>/work/screen_context.txt` before source analysis. Keep it off by default, use 6-12 screenshots normally, and never exceed 20 without asking. Source analysis incorporates this file into the per-video Qwen domain and terminology context.
 
 Normal run lifecycle:
 
 1. The wrapper checks environment, transcribes with Fun-ASR, extracts word stream, and writes `prompt.txt` for audit/repair context.
 2. If a source-language SRT/VTT exists, the wrapper maps cues to ASR segments by overlap. Similar reference text corrects `SRC_DISPLAY` and qwen-mt-plus input while ASR `SRC_RAW` remains unchanged for timestamp alignment and coverage validation.
-3. If `segments.txt` does not already exist or was not supplied with `--segments`, the wrapper automatically calls `scripts/generate_segments_with_dashscope.py --model auto`, which resolves to fixed `qwen-mt-plus`.
-4. The wrapper pauses with exit code `3` and generates `work/global_review/semantic/`. The orchestrator reads every section in manifest order before editing, builds one global context, reviews every target range, writes hash-bound section outputs and the semantic receipt, then reruns the same command.
-5. The wrapper validates exact source-word coverage, repairs terms, aligns timestamps, and runs deterministic QA. Length and duration rules are guardrails applied after semantic review, not the primary segmentation algorithm.
-6. The wrapper pauses with exit code `4` and generates `work/global_review/final-qc/`. The orchestrator reads the global context, QA report, and every final section, then records all required whole-document checks. Any finding requires revising semantic-review outputs and rerunning; only `status=passed` permits export.
-7. After successful export, delete only `.work/input/` audio/source-subtitle inputs and return the completion summary in chat.
+3. Exit `3`: generate `work/global_review/source-analysis/`. The orchestrator reads every source section and creates the validated Qwen translation context.
+4. Call qwen-mt-plus with the validated context. If context SHA-256 changes, reject old segments and translation cache.
+5. Exit `4`: generate `work/global_review/semantic/`. The orchestrator compares source and draft, corrects mistranslations, re-segments by meaning, writes reviewed sections, and reruns.
+6. Validate coverage, repair terms, align timestamps, and run deterministic QA.
+7. Exit `5`: generate `work/global_review/final-qc/`. The orchestrator reviews every final section and records all required checks.
+8. Export only after all three gates pass, then delete `.work/input/` inputs and return the summary.
 
 ## `segments.txt` Format
 

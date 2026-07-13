@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from video_to_subtitles import (
     record_step_timing,
     run_deterministic_qa,
     semantic_review_gate,
+    source_analysis_gate,
     write_run_summary,
 )
 
@@ -52,8 +54,16 @@ def main() -> int:
         raise FileNotFoundError(f"Missing {work_dir / 'word_table.json'}")
 
     step_started = time.monotonic()
-    if not semantic_review_gate(work_dir):
+    source_subtitle = None
+    meta_path = work_dir / "segment_generation_meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        candidate = Path(str(meta.get("source_subtitle") or ""))
+        source_subtitle = candidate if str(candidate) and candidate.is_file() else None
+    if not source_analysis_gate(run_dir / "transcript", work_dir, source_subtitle):
         return 3
+    if not semantic_review_gate(work_dir):
+        return 4
     run_deterministic_qa(
         work_dir,
         args.domain_name,
@@ -62,7 +72,7 @@ def main() -> int:
         args.disable_domain_term_checks,
     )
     if not final_qc_gate(work_dir):
-        return 4
+        return 5
     export_subtitle_files(work_dir, subtitles_dir, outputs_dir, args.output_base, args.source_first)
     record_step_timing(work_dir, "export", time.monotonic() - step_started, "finalize existing run")
     elapsed = time.monotonic() - started_at

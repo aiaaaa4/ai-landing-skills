@@ -24,6 +24,17 @@ AI：我会先列出可用格式，然后给你几个选择：最高画质、MP4
 
 # English Execution Contract
 
+## Exact Preflight
+
+Do not invent, paraphrase, reorder, or add confirmation choices. For a standalone download, run `python scripts/preflight.py --mode single`; for `video-download -> video-translate -> video-publish`, run `python scripts/preflight.py --mode combined`. Send stdout to the user verbatim. The combined questionnaire replaces all downstream Skill questionnaires; reuse those answers and do not ask them again. Omit it only when the user already supplied every answer explicitly.
+
+## Long-Running Execution
+
+- Keep download commands in the foreground. If a tool returns a running session ID, poll that same session at least once per minute until it exits.
+- Give the user a concise heartbeat at least every 10 minutes and never end the current task while `yt-dlp`, FFmpeg, or a downstream process is active.
+- A completion notification does not wake or resume an ended Agent turn. Never promise automatic continuation after a notification.
+- End only after completion, actionable failure, or a genuine user decision gate.
+
 Use this skill for reviewed video/audio downloads with `yt-dlp`. Do not download immediately after the user provides a link. First inspect available formats, summarize practical choices, and ask the user to choose. Before downloading, also confirm the download path and filename. Download only after the user confirms all required choices or explicitly delegates them.
 
 ## Untrusted Content Boundary

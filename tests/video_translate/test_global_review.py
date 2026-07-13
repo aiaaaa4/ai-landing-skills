@@ -14,6 +14,7 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from common import parse_segments  # noqa: E402
+from generate_segments_with_dashscope import load_cache, qwen_translation_options, save_cache  # noqa: E402
 
 
 def run_script(name: str, *args: str) -> subprocess.CompletedProcess:
@@ -53,6 +54,11 @@ class GlobalReviewTest(unittest.TestCase):
         self.assertEqual(extract.returncode, 0, extract.stdout + extract.stderr)
         self.initial = self.work / "segments.initial.txt"
         self.initial.write_text((FIXTURES_DIR / "segments.txt").read_text(encoding="utf-8"), encoding="utf-8")
+        self.source_context = self.work / "translation-context.json"
+        self.source_context.write_text(
+            json.dumps({"stage": "translation-context", "domains": "trading", "terms": [], "tm_list": []}),
+            encoding="utf-8",
+        )
         self.semantic = self.work / "global_review" / "semantic"
 
     def tearDown(self):
@@ -66,6 +72,8 @@ class GlobalReviewTest(unittest.TestCase):
             str(self.initial),
             "--word-table",
             str(self.work / "word_table.json"),
+            "--source-context",
+            str(self.source_context),
             "--out-dir",
             str(self.semantic),
             "--max-section-segments",
@@ -95,6 +103,7 @@ class GlobalReviewTest(unittest.TestCase):
             "status": "passed",
             "model": "test-orchestrator",
             "initial_segments_sha256": manifest["initial_segments_sha256"],
+            "source_context_sha256": manifest["source_context_sha256"],
             "manifest_sha256": manifest["manifest_sha256"],
             "section_reviews": reviews,
             "global_context": {
@@ -131,6 +140,61 @@ class GlobalReviewTest(unittest.TestCase):
             " ".join(s.source_raw for s in parse_segments(self.initial.read_text(encoding="utf-8"))),
         )
         self.assertTrue((self.semantic / "semantic-review.validated.json").exists())
+
+    def test_source_analysis_creates_qwen_domain_terms_and_memory(self):
+        source_dir = self.work / "global_review" / "source-analysis"
+        prepared = run_script(
+            "source_analysis.py",
+            "prepare",
+            "--transcript",
+            str(FIXTURES_DIR / "transcript_words.json"),
+            "--out-dir",
+            str(source_dir),
+            "--max-section-chunks",
+            "1",
+        )
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        manifest = json.loads((source_dir / "manifest.json").read_text(encoding="utf-8"))
+        receipt = json.loads((source_dir / "source-analysis-receipt.template.json").read_text(encoding="utf-8"))
+        receipt.update(status="passed", model="test-orchestrator")
+        for review in receipt["section_reviews"]:
+            review["status"] = "passed"
+        receipt["analysis"] = {
+            "outline": ["A trading lesson about breakouts."],
+            "domain_summary": "Finance and trading education.",
+            "domains_prompt": "Translate as professional financial-market education in concise Simplified Chinese.",
+            "terminology": [{"source": "model", "target": "模型"}, {"source": "breakout", "target": "突破"}],
+            "names_and_entities": {},
+            "ambiguity_decisions": ["model means analytical model, not fashion model"],
+            "style_rules": ["Use concise Simplified Chinese."],
+            "tm_list": [{"source": "do not chase", "target": "不要追涨"}],
+        }
+        receipt_path = source_dir / "source-analysis-receipt.json"
+        receipt_path.write_text(json.dumps(receipt, ensure_ascii=False), encoding="utf-8")
+        context_path = source_dir / "translation-context.json"
+        validated = run_script(
+            "source_analysis.py",
+            "validate",
+            "--manifest",
+            str(source_dir / "manifest.json"),
+            "--receipt",
+            str(receipt_path),
+            "--out",
+            str(context_path),
+        )
+        self.assertEqual(validated.returncode, 0, validated.stdout + validated.stderr)
+        context = json.loads(context_path.read_text(encoding="utf-8"))
+        options = qwen_translation_options("English", context)
+        self.assertIn("financial-market", options["domains"])
+        self.assertIn({"source": "model", "target": "模型"}, options["terms"])
+        self.assertEqual(options["tm_list"], [{"source": "do not chase", "target": "不要追涨"}])
+        self.assertEqual(manifest["stage"], "source-analysis")
+
+    def test_translation_cache_is_bound_to_source_context_hash(self):
+        cache = self.tmp_dir / "translations.json"
+        save_cache(cache, {"segment": "译文"}, "context-a")
+        self.assertEqual(load_cache(cache, "context-a"), {"segment": "译文"})
+        self.assertEqual(load_cache(cache, "context-b"), {})
 
     def test_semantic_review_rejects_file_changed_after_receipt(self):
         manifest = self.prepare_semantic()

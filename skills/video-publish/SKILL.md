@@ -32,12 +32,21 @@ python scripts/check_ffmpeg.py
 
 ## Required Confirmation
 
+Run `python scripts/preflight.py` and send stdout verbatim. Do not invent, paraphrase, reorder, or add choices. In a combined workflow, reuse the answers collected by `video-download/scripts/preflight.py --mode combined` and do not ask again.
+
 每次任务都先通过对话确认以下内容：
 
 1. **免责声明**：默认使用 `assets/disclaimer-zh-en-1920x1080.png` 并显示 `3` 秒；如用户不需要免责声明则不要生成发布版视频。
 2. **输出**：确认发布版 MP4 的绝对路径及封面图片所在文件夹；已有同名文件时必须再次确认覆盖。
 3. **外挂字幕**：如果项目内已有与源视频匹配的 SRT，确认是否同时生成发布版外挂字幕；这是时间轴平移，不是字幕烧录，也不触发全片重编码。
 4. **高级处理**：只有用户明确要求字幕烧录、水印、裁切或画面滤镜时才使用全片重编码，并提前说明画质、体积和耗时影响。
+
+## Long-Running Execution
+
+- Keep FFmpeg and packaging commands in the foreground. If a running session ID is returned, poll that same session at least once per minute.
+- Give the user a concise heartbeat at least every 10 minutes and never end the current task while a child process is active.
+- A completion notification does not wake or resume an ended Agent turn. Never promise automatic continuation after a notification.
+- End only after delivery, actionable failure, or a genuine user decision gate.
 
 YouTube、B站等平台的投稿封面应同时使用选中的独立 PNG；不要假设平台一定采用视频第一帧。
 

@@ -73,6 +73,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--source-language-name", default="source-language")
     parser.add_argument("--domain-name", default="finance/trading training videos")
+    parser.add_argument(
+        "--translation-context",
+        type=Path,
+        required=True,
+        help="Validated whole-source context containing Qwen-MT domains, terms, and translation memory.",
+    )
     parser.add_argument("--batch-size", type=int, default=40)
     parser.add_argument("--concurrency", type=int, default=1, help="Parallel DashScope translation batches. Production default is 1 because qwen-mt-plus is more stable in serial mode.")
     parser.add_argument("--heartbeat-seconds", type=int, default=60, help="Print progress at least this often while translating batches.")
@@ -323,6 +329,19 @@ def qwen_mt_source_lang(source_language_name: str) -> str:
     return QWEN_MT_SOURCE_LANG_MAP.get(key, "auto")
 
 
+def qwen_translation_options(source_language_name: str, translation_context: dict) -> dict:
+    options = {
+        "source_lang": qwen_mt_source_lang(source_language_name),
+        "target_lang": QWEN_MT_TARGET_LANG,
+        "domains": translation_context["domains"],
+    }
+    if translation_context.get("terms"):
+        options["terms"] = translation_context["terms"]
+    if translation_context.get("tm_list"):
+        options["tm_list"] = translation_context["tm_list"]
+    return options
+
+
 def retry_delay_seconds(exc: Exception, attempt: int) -> float:
     """Respect a gateway-provided retry window and otherwise back off conservatively."""
     if isinstance(exc, urllib.error.HTTPError):
@@ -342,16 +361,15 @@ def dashscope_translate_qwen_mt(
     item: SegmentChunk,
     max_retries: int,
     source_language_name: str,
+    translation_context: dict,
 ) -> dict[str, str]:
     # Qwen-MT rejects system messages. The source is untrusted media data and is
     # accepted only as the translation model's source text, never as tool input.
+    translation_options = qwen_translation_options(source_language_name, translation_context)
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": untrusted_source_text(item.source_display)}],
-        "translation_options": {
-            "source_lang": qwen_mt_source_lang(source_language_name),
-            "target_lang": QWEN_MT_TARGET_LANG,
-        },
+        "translation_options": translation_options,
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
@@ -379,10 +397,28 @@ def dashscope_translate_qwen_mt(
     raise RuntimeError(f"Qwen-MT translation failed after {max_retries} attempts: {last_error}")
 
 
-def load_cache(path: Path | None) -> dict[str, str]:
+def load_translation_context(path: Path) -> tuple[dict, str]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("stage") != "translation-context" or not str(payload.get("domains") or "").strip():
+        raise RuntimeError("Translation context is missing validated source-analysis domains.")
+    for name in ("terms", "tm_list"):
+        value = payload.get(name)
+        if not isinstance(value, list):
+            raise RuntimeError(f"Translation context {name} must be a list.")
+    return payload, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def load_cache(path: Path | None, context_sha256: str) -> dict[str, str]:
     if not path or not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != 2:
+        return {}
+    if payload.get("translation_context_sha256") != context_sha256:
+        print("Ignoring translation cache created with a different whole-source context.", flush=True)
+        return {}
+    translations = payload.get("translations")
+    return translations if isinstance(translations, dict) else {}
 
 
 def optional_text(path: Path | None) -> str:
@@ -391,12 +427,17 @@ def optional_text(path: Path | None) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-def save_cache(path: Path | None, translations: dict[str, str]) -> None:
+def save_cache(path: Path | None, translations: dict[str, str], context_sha256: str) -> None:
     if not path:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(translations, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    payload = {
+        "schema_version": 2,
+        "translation_context_sha256": context_sha256,
+        "translations": translations,
+    }
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
@@ -420,6 +461,8 @@ def translate_pending(
     screen_context: str,
     heartbeat_seconds: int,
     qwen_mt_min_interval_seconds: float,
+    translation_context: dict,
+    translation_context_sha256: str,
 ) -> dict[str, str]:
     batches = chunk_batches(pending, batch_size)
     total = len(batches)
@@ -457,6 +500,7 @@ def translate_pending(
                     item,
                     max_retries,
                     source_language_name,
+                    translation_context,
                 )
             )
         return result
@@ -486,7 +530,7 @@ def translate_pending(
             print(f"Translating batch {batch_index}/{total}: {len(batch)} items", flush=True)
             _idx, result = translate_one(batch_index, batch)
             translations.update(result)
-            save_cache(cache, translations)
+            save_cache(cache, translations, translation_context_sha256)
             completed += 1
             now = time.monotonic()
             elapsed = now - started_at
@@ -507,7 +551,7 @@ def translate_pending(
         for future in as_completed(futures):
             batch_index, result = future.result()
             translations.update(result)
-            save_cache(cache, translations)
+            save_cache(cache, translations, translation_context_sha256)
             completed += 1
             now = time.monotonic()
             elapsed = now - started_at
@@ -572,7 +616,8 @@ def main() -> int:
             flush=True,
         )
     chunks = build_chunks(transcript, args.max_display_tokens, source_references)
-    translations = load_cache(args.cache)
+    translation_context, translation_context_sha256 = load_translation_context(args.translation_context)
+    translations = load_cache(args.cache, translation_context_sha256)
     print(f"Chunks: {len(chunks)}; cached translations: {len(translations)}", flush=True)
 
     screen_context = optional_text(args.screen_context)
@@ -595,6 +640,8 @@ def main() -> int:
         screen_context=screen_context,
         heartbeat_seconds=args.heartbeat_seconds,
         qwen_mt_min_interval_seconds=max(0.0, args.qwen_mt_min_interval_seconds),
+        translation_context=translation_context,
+        translation_context_sha256=translation_context_sha256,
     )
 
     write_segments(args.out, chunks, translations)
@@ -615,6 +662,11 @@ def main() -> int:
             else ""
         ),
         "reference_corrected_chunks": sum(1 for chunk in chunks if chunk.reference_used),
+        "translation_context": str(args.translation_context.resolve()),
+        "translation_context_sha256": translation_context_sha256,
+        "domain_prompt_applied": True,
+        "term_count": len(translation_context.get("terms") or []),
+        "translation_memory_count": len(translation_context.get("tm_list") or []),
     }
     (args.out.parent / "segment_generation_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2) + "\n",

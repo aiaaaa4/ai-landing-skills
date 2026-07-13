@@ -24,7 +24,7 @@
 
 ### [一键加速视频下载](skills/video-download)
 
-**`aiaaaa4.video-download` · v1.2.4 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
+**`aiaaaa4.video-download` · v1.2.5 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
 
 把一个视频链接交给 Agent，先看清可下载的画质、编码、大小和容器，再决定下载。适合希望保留选择权、又不想手动研究 `yt-dlp` 参数的人。
 
@@ -39,18 +39,18 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.4.2 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.5.0 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
-面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。它以词级时间戳为基础，由翻译模型完成稳定初译，再由编排模型通读全片、理解上下文、语义重分段，并通过确定性 QA 与最终全文一致性 QC 后输出 ASS/SRT。
+面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。编排模型先通读完整源文，生成领域提示、术语和歧义判断供翻译模型初译；之后再次通读原文与译文，完成重译审校、语义重分段、确定性 QA 和最终全文 QC。
 
 - 适合英语、法语、西班牙语、意大利语等本地视频翻译为中文。
-- 固定生产链路：Fun-ASR 词级转写、`qwen-mt-plus` 初译、编排模型全文语义审校、术语与时间轴 QA、编排模型最终全文 QC。即使已有原字幕也仍执行 ASR；原字幕只校正识别内容，词级时间戳始终以 ASR 为准。
+- 固定生产链路：Fun-ASR 词级转写、编排模型译前全文分析、带 `domains/terms/tm_list` 的 `qwen-mt-plus` 初译、编排模型全文重译审校、确定性 QA 和最终全文 QC。
 - 支持重要 PPT、图表、UI、代码或屏幕文字的上下文处理，并为长视频持续反馈进度。
 - [查看完整工作流说明](docs/video-translate/视频翻译工作流说明书.md)。
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.7 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
+**`aiaaaa4.video-publish` · v1.0.8 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
 
 为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒固定免责声明，并优先通过音频内容匹配生成时间轴准确的发布版 SRT；默认不重新编码视频主体。
 

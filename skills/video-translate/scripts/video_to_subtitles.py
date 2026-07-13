@@ -331,17 +331,23 @@ def ensure_ai_segments(
     language: str,
     domain_name: str,
     source_subtitle: Path | None,
+    translation_context: Path,
 ) -> None:
     segments = work_dir / "segments.txt"
     if segments.exists():
         meta_path = work_dir / "segment_generation_meta.json"
+        if not meta_path.exists():
+            raise RuntimeError(
+                "Existing segments have no generation metadata. Use a new --run-id so translations cannot mix."
+            )
+        meta = read_json(meta_path)
+        context_hash = hashlib.sha256(translation_context.read_bytes()).hexdigest()
+        if meta.get("translation_context_sha256") != context_hash:
+            raise RuntimeError(
+                "Existing segments were generated with a different whole-source translation context. "
+                "Use a new --run-id so cached translations cannot mix."
+            )
         if source_subtitle:
-            if not meta_path.exists():
-                raise RuntimeError(
-                    "Existing segments have no source-reference metadata. "
-                    "Use a new --run-id so corrected text and cached translations cannot mix."
-                )
-            meta = read_json(meta_path)
             previous = str(meta.get("source_subtitle") or "")
             previous_hash = str(meta.get("source_subtitle_sha256") or "")
             current_hash = hashlib.sha256(source_subtitle.read_bytes()).hexdigest()
@@ -368,6 +374,8 @@ def ensure_ai_segments(
         source_language_name(language),
         "--domain-name",
         domain_name,
+        "--translation-context",
+        str(translation_context),
         "--concurrency",
         "1",
         "--max-retries",
@@ -633,6 +641,18 @@ def write_run_summary(
     transcript_path = run_dir / "transcript" / "transcript_words.json"
     timings_path = work_dir / "step_timings.json"
     helper_meta_path = work_dir / "segment_generation_meta.json"
+    source_validation = read_optional_json(
+        work_dir / "global_review" / "source-analysis" / "source-analysis.validated.json"
+    )
+    semantic_validation = read_optional_json(
+        work_dir / "global_review" / "semantic" / "semantic-review.validated.json"
+    )
+    qc_validation = read_optional_json(work_dir / "global_review" / "final-qc" / "final-qc.validated.json")
+    source_analysis_model = str(source_validation.get("model") or "unknown") if isinstance(source_validation, dict) else "unknown"
+    semantic_review_model = str(semantic_validation.get("model") or "unknown") if isinstance(semantic_validation, dict) else "unknown"
+    final_qc_model = str(qc_validation.get("model") or "unknown") if isinstance(qc_validation, dict) else "unknown"
+    if orchestrator_model == "current orchestrating AI (not recorded)" and source_analysis_model != "unknown":
+        orchestrator_model = source_analysis_model
 
     segment_count = "unknown"
     if aligned_path.exists():
@@ -654,7 +674,11 @@ def write_run_summary(
     if isinstance(helper_meta, dict):
         translation_path = "helper_dashscope"
         effective_translation_model = str(helper_meta.get("model") or translation_model or "unknown")
-        helper_detail = f"fallback={helper_meta.get('fallback_model', 'none')}; concurrency={helper_meta.get('concurrency', 'unknown')}; batches cached via helper"
+        helper_detail = (
+            f"concurrency={helper_meta.get('concurrency', 'unknown')}; "
+            f"domains_applied={helper_meta.get('domain_prompt_applied', False)}; "
+            f"terms={helper_meta.get('term_count', 0)}; tm={helper_meta.get('translation_memory_count', 0)}"
+        )
         source_reference = str(helper_meta.get("source_subtitle") or "none")
         reference_corrected_chunks = str(helper_meta.get("reference_corrected_chunks") or 0)
     else:
@@ -706,6 +730,9 @@ def write_run_summary(
         f"- ASR provider: {asr_provider}",
         f"- ASR model: {asr_model}",
         f"- Orchestrator model: {orchestrator_model}",
+        f"- Whole-source analysis model: {source_analysis_model}",
+        f"- Semantic translation review model: {semantic_review_model}",
+        f"- Final whole-document QC model: {final_qc_model}",
         f"- Segment translation path: {translation_path}",
         f"- Segment translation model: {effective_translation_model}",
         f"- Helper detail: {helper_detail}",
@@ -869,6 +896,8 @@ def semantic_review_gate(work_dir: Path) -> bool:
             str(initial_segments),
             "--word-table",
             str(work_dir / "word_table.json"),
+            "--source-context",
+            str(work_dir / "global_review" / "source-analysis" / "translation-context.json"),
             "--out-dir",
             str(semantic_dir),
         ]
@@ -904,6 +933,53 @@ def semantic_review_gate(work_dir: Path) -> bool:
         print("Semantic review validation failed; no subtitles will be exported.", flush=True)
         return False
     shutil.copyfile(reviewed_segments, segments)
+    return True
+
+
+def source_analysis_gate(transcript_dir: Path, work_dir: Path, source_subtitle: Path | None) -> bool:
+    analysis_dir = work_dir / "global_review" / "source-analysis"
+    translation_context = analysis_dir / "translation-context.json"
+    command = [
+        sys.executable,
+        "scripts/source_analysis.py",
+        "prepare",
+        "--transcript",
+        str(transcript_dir / "transcript_words.json"),
+        "--out-dir",
+        str(analysis_dir),
+    ]
+    if source_subtitle:
+        command.extend(["--source-subtitle", str(source_subtitle)])
+    screen_context = work_dir / "screen_context.txt"
+    if screen_context.is_file() and screen_context.stat().st_size > 0:
+        command.extend(["--screen-context", str(screen_context)])
+    run_step(command)
+    receipt = analysis_dir / "source-analysis-receipt.json"
+    if not receipt.exists():
+        print("", flush=True)
+        print("Mandatory whole-source analysis is required before qwen-mt-plus translation.", flush=True)
+        print(f"- Follow the exact procedure in: {analysis_dir / 'WORKFLOW.md'}", flush=True)
+        print(f"- Read every source section listed in: {analysis_dir / 'manifest.json'}", flush=True)
+        print(f"- Complete: {analysis_dir / 'source-analysis-receipt.template.json'}", flush=True)
+        print(f"- Save as: {receipt}", flush=True)
+        print("- Rerun the same command after the orchestrator has analyzed the complete source.", flush=True)
+        return False
+    status = run_step_status(
+        [
+            sys.executable,
+            "scripts/source_analysis.py",
+            "validate",
+            "--manifest",
+            str(analysis_dir / "manifest.json"),
+            "--receipt",
+            str(receipt),
+            "--out",
+            str(translation_context),
+        ]
+    )
+    if status != 0:
+        print("Whole-source analysis validation failed; translation will not start.", flush=True)
+        return False
     return True
 
 
@@ -1040,11 +1116,27 @@ def main() -> int:
     record_step_timing(work_dir, "prompt", time.monotonic() - step_started)
     record_step_status(work_dir, "prompt", "done")
 
+    record_step_status(work_dir, "source_analysis", "running", "mandatory whole-source analysis before translation")
+    step_started = time.monotonic()
+    if not source_analysis_gate(transcript_dir, work_dir, source_subtitle):
+        record_step_timing(work_dir, "source_analysis", time.monotonic() - step_started, "waiting for orchestrator source analysis")
+        record_step_status(work_dir, "source_analysis", "waiting", "complete all source-analysis sections and receipt")
+        return 3
+    record_step_timing(work_dir, "source_analysis", time.monotonic() - step_started, "validated whole-source translation context")
+    record_step_status(work_dir, "source_analysis", "done")
+
     record_step_status(work_dir, "ai_segments", "running", "fixed qwen-mt-plus helper")
     step_started = time.monotonic()
     maybe_copy_segments(args.segments, work_dir / "segments.txt")
     if not args.segments:
-        ensure_ai_segments(work_dir, transcript_dir, args.language, args.domain_name, source_subtitle)
+        ensure_ai_segments(
+            work_dir,
+            transcript_dir,
+            args.language,
+            args.domain_name,
+            source_subtitle,
+            work_dir / "global_review" / "source-analysis" / "translation-context.json",
+        )
     record_step_timing(
         work_dir,
         "ai_segments",
@@ -1058,7 +1150,7 @@ def main() -> int:
     if not semantic_review_gate(work_dir):
         record_step_timing(work_dir, "semantic_review", time.monotonic() - step_started, "waiting for orchestrator review")
         record_step_status(work_dir, "semantic_review", "waiting", "complete all semantic review sections and receipt")
-        return 3
+        return 4
     record_step_timing(work_dir, "semantic_review", time.monotonic() - step_started, "validated full-document semantic review")
     record_step_status(work_dir, "semantic_review", "done")
 
@@ -1079,7 +1171,7 @@ def main() -> int:
     if not final_qc_gate(work_dir):
         record_step_timing(work_dir, "global_qc", time.monotonic() - step_started, "waiting for orchestrator QC")
         record_step_status(work_dir, "global_qc", "waiting", "complete final QC receipt")
-        return 4
+        return 5
     record_step_timing(work_dir, "global_qc", time.monotonic() - step_started, "validated full-document final QC")
     record_step_status(work_dir, "global_qc", "done")
 

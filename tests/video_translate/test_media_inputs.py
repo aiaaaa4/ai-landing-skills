@@ -158,20 +158,26 @@ class MediaInputTest(unittest.TestCase):
         transcript_dir.mkdir()
         subtitle = self.tmp_dir / "source.srt"
         subtitle.write_text("reference v1", encoding="utf-8")
+        translation_context = self.tmp_dir / "translation-context.json"
+        translation_context.write_text(
+            json.dumps({"stage": "translation-context", "domains": "test", "terms": [], "tm_list": []}),
+            encoding="utf-8",
+        )
         (work_dir / "segments.txt").write_text("segments", encoding="utf-8")
         (work_dir / "segment_generation_meta.json").write_text(
             json.dumps(
                 {
                     "source_subtitle": str(subtitle),
                     "source_subtitle_sha256": hashlib.sha256(subtitle.read_bytes()).hexdigest(),
+                    "translation_context_sha256": hashlib.sha256(translation_context.read_bytes()).hexdigest(),
                 }
             ),
             encoding="utf-8",
         )
-        ensure_ai_segments(work_dir, transcript_dir, "en", "test", subtitle)
+        ensure_ai_segments(work_dir, transcript_dir, "en", "test", subtitle, translation_context)
         subtitle.write_text("reference v2", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "different source subtitle"):
-            ensure_ai_segments(work_dir, transcript_dir, "en", "test", subtitle)
+            ensure_ai_segments(work_dir, transcript_dir, "en", "test", subtitle, translation_context)
 
     def test_keeps_video_when_no_downloaded_audio_exists(self):
         video = self.tmp_dir / "lesson.mp4"

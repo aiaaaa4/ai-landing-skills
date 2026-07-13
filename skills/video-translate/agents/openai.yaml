@@ -2,7 +2,7 @@
 # Author information is for display and source identification, not an additional license restriction.
 interface:
   display_name: "人工级视频字幕翻译"
-  short_description: "用词级时间轴、全文语义审校和双重 QC 生成高质量双语字幕。"
-  default_prompt: "仅在用户明确请求本地视频字幕翻译时使用 $video-translate；用户直接提供音频必须拒绝。先确认视频路径、源语言、输出目录、屏幕上下文需求和外发处理同意；始终用 Fun-ASR 获取词级时间戳，以 qwen-mt-plus 初译，再由当前编排模型通读全文、语义重分段并完成最终全文 QC，全部门禁通过后输出双语 ASS/SRT。"
+  short_description: "用词级时间轴、译前全文分析、全文重译审校和最终 QC 生成双语字幕。"
+  default_prompt: "仅在用户明确请求本地视频字幕翻译时使用 $video-translate；用户直接提供音频必须拒绝。原样发送 scripts/preflight.py 的固定问卷。Fun-ASR 后先由当前编排模型通读完整源文，生成 domains、terms 和 tm_list 供 qwen-mt-plus 初译；再通读原文与译文完成重译审校、语义重分段和最终全文 QC。长任务必须前台轮询，禁止结束轮次等待通知。"
 policy:
   allow_implicit_invocation: false

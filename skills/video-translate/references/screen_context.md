@@ -79,7 +79,7 @@ Frame capture is local and deterministic with `ffmpeg`, which is cross-platform 
 Write the result to:
 
 ```text
-runs/<run-id>/work/screen_context.txt
+<outputs-dir>/.work/<run-id>/work/screen_context.txt
 ```
 
 Use concise time-stamped entries:
