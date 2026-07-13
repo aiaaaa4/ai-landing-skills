@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-domain-term-checks", action="store_true")
     parser.add_argument("--source-first", action="store_true")
     parser.add_argument("--orchestrator-model", default=None, help="Name of the AI model orchestrating this run, for the final chat summary.")
-    parser.add_argument("--translation-model", default="qwen-mt-plus", help="Name of the model used for segments.txt. Production default: qwen-mt-plus.")
+    parser.add_argument("--translation-model", default=None, help="Optional model label used only in the final run summary.")
     return parser.parse_args()
 
 
@@ -60,10 +60,13 @@ def main() -> int:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         candidate = Path(str(meta.get("source_subtitle") or ""))
         source_subtitle = candidate if str(candidate) and candidate.is_file() else None
-    if not source_analysis_gate(run_dir / "transcript", work_dir, source_subtitle):
+    config_path = work_dir / "workflow_config.json"
+    workflow_config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+    translation_provider = str(workflow_config.get("translation_provider") or "qwen-mt-plus")
+    if not source_analysis_gate(run_dir / "transcript", work_dir, source_subtitle, translation_provider):
         return 3
     if not semantic_review_gate(work_dir):
-        return 4
+        return 5
     run_deterministic_qa(
         work_dir,
         args.domain_name,
@@ -72,13 +75,13 @@ def main() -> int:
         args.disable_domain_term_checks,
     )
     if not final_qc_gate(work_dir):
-        return 5
+        return 6
     export_subtitle_files(work_dir, subtitles_dir, outputs_dir, args.output_base, args.source_first)
     record_step_timing(work_dir, "export", time.monotonic() - step_started, "finalize existing run")
     elapsed = time.monotonic() - started_at
     media = args.media.expanduser().resolve() if args.media else Path("unknown")
     orchestrator_model = model_name_from_env(args.orchestrator_model)
-    translation_model = args.translation_model or "qwen-mt-plus"
+    translation_model = args.translation_model or ("current Agent model" if translation_provider == "agent" else "qwen-mt-plus")
     write_run_summary(work_dir, run_dir, media, args.language, args.domain_name, outputs_dir, args.output_base, elapsed, orchestrator_model, translation_model)
     print(f"Done in {elapsed:.1f}s ({elapsed / 60:.1f} min)")
     return 0

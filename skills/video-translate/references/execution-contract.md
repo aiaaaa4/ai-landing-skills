@@ -14,7 +14,7 @@ Use this skill only when the user selects a local video file. Reject direct user
 4. Use Fun-ASR words and word timestamps as the alignment source of truth.
 5. If one original-language SRT/VTT exists under `.work/input/`, map it to ASR segments by temporal overlap and use sufficiently similar text to correct display/translation content without changing `SRC_RAW`.
 6. Before translation, require the orchestrator to read the complete source and create a validated per-video context with `domains`, `terms`, ambiguity decisions, entities, style rules, and `tm_list`.
-7. Call qwen-mt-plus with that context and bind its cache to the context SHA-256.
+7. Use the selected initial translation path: qwen-mt-plus with context-bound cache by default, or hash-bound Agent-native section translation when the user explicitly chooses the current Codex/orchestrator model.
 8. Require the orchestrator to compare every draft translation against source/context, correct mistranslations, and re-segment by meaning.
 9. Validate coverage, repair terms, align timestamps, and run deterministic QA.
 10. Require final whole-document QC, then export SRT/ASS only when every check passes.
@@ -23,13 +23,14 @@ Use this skill only when the user selects a local video file. Reject direct user
 Do not switch ASR providers, use local Whisper, or add backup paths unless the user explicitly asks.
 
 
-## Fixed Model Policy
+## Fixed ASR And Selectable Translation Policy
 
-Do not ask ordinary users to choose among many models. The production stack is fixed because it has been tested on real subtitle jobs and is more reliable than ad-hoc model switching.
+Do not present an open-ended model list. ASR is fixed; initial translation has exactly two supported paths selected by the fixed questionnaire.
 
 - ASR: Alibaba Bailian / DashScope `Fun-ASR`. It is required because the workflow depends on long-recorded-audio ASR and word-level timestamps.
-- Initial translation: Alibaba Bailian `qwen-mt-plus`, called only after validated whole-source analysis. Every request uses Qwen-MT `domains`, `terms`, and optional `tm_list`; cached translations are invalid when that context changes.
-- Orchestrator: in WorkBuddy use the selected capable orchestration model; in Codex/Cursor use a strong long-context model. It performs two distinct full reads: source-only analysis before qwen-mt-plus, then source-versus-draft retranslation and semantic segmentation after qwen-mt-plus. It also performs final QC and must keep long-running processes alive through foreground execution or polling.
+- Default initial translation: Alibaba Bailian `qwen-mt-plus`, called only after validated whole-source analysis. Every request uses Qwen-MT `domains`, `terms`, and optional `tm_list`; cached translations are invalid when that context changes.
+- Optional Agent-native translation: when the user explicitly selects Codex / current Agent translation, use `--translation-provider agent`. The current Agent translates every prepared section using the validated whole-video context. Section inputs and outputs are SHA-256 receipt-bound and resumable. This path needs no translation API key but consumes the current Agent's allowance.
+- Orchestrator: use a strong long-context model. It always performs source-only analysis, source-versus-draft retranslation/semantic segmentation, and final QC. In Agent mode it also performs the initial section translations. It must keep long-running processes alive through foreground execution or polling.
 
 Do not switch ASR providers, use local Whisper, or add backup model paths unless the user explicitly asks for that engineering change and accepts revalidation. Groq Whisper or other providers must prove word-level timestamps before production use.
 
@@ -40,7 +41,7 @@ Run commands from the skill folder, or copy the skill folder into the working pr
 User-side accounts and secrets:
 
 - OkFile account: register at `https://www.okfile.com/`, then create or copy the API key from `https://www.okfile.com/en/account/api-keys`.
-- Alibaba Cloud / Model Studio account: sign in at `https://bailian.console.aliyun.com/`, create a DashScope API key, and add a small balance such as 2-10 CNY before batch use.
+- Alibaba Cloud / Model Studio account: get a DashScope API key at `https://help.aliyun.com/zh/model-studio/get-api-key`, copy the workspace ID from the Model Studio console, and add a small balance before batch use.
 - Required values: `DASHSCOPE_API_KEY`, `ALIYUN_WORKSPACE_ID`, and `OKFILE_TOKEN`.
 - Required media: the user-selected video file must exist locally and use a supported video extension. Audio under `.work/input/` is an internal workflow optimization, not a supported user input.
 
@@ -90,18 +91,19 @@ Run `python scripts/preflight.py` and send stdout verbatim. This script is the s
 First use message after environment check, in Chinese:
 
 ```text
-这套工作流会先通过 OkFile 和 Fun-ASR 获取词级转写；当前编排模型会先通读完整源文，生成本视频专属领域提示、术语和翻译记忆，再交给 qwen-mt-plus 初译。初译后，编排模型会再次通读原文与译文，纠正词义、按语义重分段并完成最终 QC。默认翻译为简体中文，固定输出双语 ASS/SRT。音频和字幕文本只有在你明确同意外发处理后才会发送。
+这套工作流会固定通过 OkFile 和 Fun-ASR 获取词级转写；当前编排模型先通读完整源文，生成本视频专属领域提示、术语和翻译记忆。初译可选择默认的 qwen-mt-plus，或由当前 Codex / 编排模型直接完成。初译后，编排模型会再次通读原文与译文，纠正词义、按语义重分段并完成最终 QC。默认翻译为简体中文，固定输出双语 ASS/SRT。只有在你明确同意外发处理后才会发送音频和文本。
 ```
 
 The fixed questionnaire covers these fields:
 
 1. Source language: default English (`--language en`). Common supported hints: French (`fr`), Spanish (`es`), Italian (`it`). If uncertain, infer and state the assumption.
 2. Target language: default Simplified Chinese. Bilingual ASS/SRT is the fixed output structure, not a competing target-language option.
-3. Screen context: ask whether the video contains dense or important visible text, PPT/slides, charts, software UI, code, signs, or meaningful images not fully spoken aloud. Keep it off by default; enabling it may increase time and cost.
-4. Subtitle output directory: default to the project-level `outputs/` directory. Ask the user to confirm this default; if they want a different location, ask for the absolute or project-relative path and pass it with `--outputs-dir "<path>"`.
-5. External-processing consent: before any command runs, state that the selected audio is uploaded only to `https://www.okfile.com`; its temporary URL is sent to Alibaba Fun-ASR; and subtitle text is sent to Alibaba qwen-mt-plus. Proceed only after an explicit affirmative answer.
+3. Translation provider: default A is qwen-mt-plus for stable, cost-effective API translation. Option B is current Codex / Agent translation and is activated only by an explicit “Codex 翻译” answer plus `--translation-provider agent`.
+4. Screen context: ask whether the video contains dense or important visible text, PPT/slides, charts, software UI, code, signs, or meaningful images not fully spoken aloud. Keep it off by default; enabling it may increase time and cost.
+5. Subtitle output directory: default to the project-level `outputs/` directory. Ask the user to confirm this default; if they want a different location, ask for the absolute or project-relative path and pass it with `--outputs-dir "<path>"`.
+6. External-processing consent: state that audio is uploaded only to `https://www.okfile.com` and its URL is sent to Alibaba Fun-ASR. In qwen mode subtitle text is also sent to Alibaba qwen-mt-plus; in Agent mode it is handled by the current Agent model service. Proceed only after explicit consent.
 
-Do not ask the user to select ASR/helper/orchestration models during ordinary production runs.
+Do not ask the user to select ASR or arbitrary helper/orchestration models. Ask only the fixed A/B initial-translation choice.
 
 ## Capability Boundaries
 
@@ -161,18 +163,18 @@ If the user confirmed a custom subtitle export directory, add:
 --outputs-dir "/absolute/or/project-relative/output/folder"
 ```
 
-Optional screen context: if the user confirms important visible text, read `references/screen_context.md`. Use `ffmpeg` for local screenshots. The same multimodal AI should write `<outputs-dir>/.work/<run-id>/work/screen_context.txt` before source analysis. Keep it off by default, use 6-12 screenshots normally, and never exceed 20 without asking. Source analysis incorporates this file into the per-video Qwen domain and terminology context.
+Optional screen context: if the user confirms important visible text, read `references/screen_context.md`. Use `ffmpeg` for local screenshots. The same multimodal AI should write `<outputs-dir>/.work/<run-id>/work/screen_context.txt` before source analysis. Keep it off by default, use 6-12 screenshots normally, and never exceed 20 without asking. Source analysis incorporates this file into the per-video translation context used by either provider.
 
 Normal run lifecycle:
 
 1. The wrapper checks environment, transcribes with Fun-ASR, extracts word stream, and writes `prompt.txt` for audit/repair context.
-2. If a source-language SRT/VTT exists, the wrapper maps cues to ASR segments by overlap. Similar reference text corrects `SRC_DISPLAY` and qwen-mt-plus input while ASR `SRC_RAW` remains unchanged for timestamp alignment and coverage validation.
-3. Exit `3`: generate `work/global_review/source-analysis/`. The orchestrator reads every source section and creates the validated Qwen translation context.
-4. Call qwen-mt-plus with the validated context. If context SHA-256 changes, reject old segments and translation cache.
-5. Exit `4`: generate `work/global_review/semantic/`. The orchestrator compares source and draft, corrects mistranslations, re-segments by meaning, writes reviewed sections, and reruns.
+2. If a source-language SRT/VTT exists, the wrapper maps cues to ASR segments by overlap. Similar reference text corrects `SRC_DISPLAY` and translation input while ASR `SRC_RAW` remains unchanged for timestamp alignment and coverage validation.
+3. Exit `3`: generate `work/global_review/source-analysis/`. The orchestrator reads every source section and creates the validated translation context.
+4. Default qwen path calls qwen-mt-plus with that context and rejects stale cache when its SHA-256 changes. Agent mode exits `4`, translates every section under `work/global_review/agent-translation/`, records output hashes, and reruns with `--translation-provider agent`.
+5. Exit `5`: generate `work/global_review/semantic/`. The orchestrator compares source and draft, corrects mistranslations, re-segments by meaning, writes reviewed sections, and reruns.
 6. Validate coverage, repair terms, align timestamps, and run deterministic QA.
-7. Exit `5`: generate `work/global_review/final-qc/`. The orchestrator reviews every final section and records all required checks.
-8. Export only after all three gates pass, then delete `.work/input/` inputs and return the summary.
+7. Exit `6`: generate `work/global_review/final-qc/`. The orchestrator reviews every final section and records all required checks.
+8. Export only after all applicable gates pass, then delete `.work/input/` inputs and return the summary.
 
 ## `segments.txt` Format
 
@@ -298,7 +300,7 @@ After a run successfully exports subtitles, do not finish with only file paths o
 - per-stage timing when available
 - ASR provider/model
 - orchestrating model
-- segment translation model (`qwen-mt-plus` in production)
+- segment translation provider and model (`qwen-mt-plus` by default, current Agent model when selected)
 - QA blocker count
 - QA warning count and the main warning types, if available
 - whether any focused human spot-check is recommended
@@ -321,7 +323,7 @@ Use this shape:
 模型：
 - ASR：...
 - 编排模型：...
-- 分段翻译模型：qwen-mt-plus
+- 分段翻译模型：...
 
 QA：
 - Blockers: ...
@@ -340,9 +342,9 @@ ASS is the preferred viewing format:
 
 SRT is plain text and cannot reliably control font size across players.
 
-## Segment Translation Helper
+## Initial Translation Paths
 
-`scripts/generate_segments_with_dashscope.py` is no longer an optional fallback in production. It is the fixed segment generation path and defaults to `qwen-mt-plus` when `--model auto` is used. Always pass `--cache` so interrupted runs resume instead of retranslating completed chunks.
+The public default uses `scripts/generate_segments_with_dashscope.py` with qwen-mt-plus. Always pass `--cache` so interrupted runs resume instead of retranslating completed chunks. Agent mode instead uses `scripts/agent_translation.py`; follow its generated `WORKFLOW.md`, translate every section, and keep the receipt hashes current.
 
 Manual example for diagnostics or controlled re-generation:
 

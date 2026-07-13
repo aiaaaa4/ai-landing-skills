@@ -647,6 +647,8 @@ def main() -> int:
     write_segments(args.out, chunks, translations)
     meta = {
         "path": "helper_dashscope",
+        "translation_provider": "qwen-mt-plus",
+        "translation_path": "helper-dashscope",
         "model": model,
         "model_source": model_source,
         "fallback_model": "",

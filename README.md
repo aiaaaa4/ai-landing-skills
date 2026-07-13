@@ -39,12 +39,12 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.5.0 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.5.1 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。编排模型先通读完整源文，生成领域提示、术语和歧义判断供翻译模型初译；之后再次通读原文与译文，完成重译审校、语义重分段、确定性 QA 和最终全文 QC。
 
 - 适合英语、法语、西班牙语、意大利语等本地视频翻译为中文。
-- 固定生产链路：Fun-ASR 词级转写、编排模型译前全文分析、带 `domains/terms/tm_list` 的 `qwen-mt-plus` 初译、编排模型全文重译审校、确定性 QA 和最终全文 QC。
+- 固定转写链路：OkFile + Fun-ASR 获取词级时间戳；初译公开默认使用带 `domains/terms/tm_list` 的 `qwen-mt-plus`，也可选择当前 Codex / 编排模型直接翻译。两条路径都经过译前全文分析、全文重译审校、确定性 QA 和最终全文 QC。
 - 支持重要 PPT、图表、UI、代码或屏幕文字的上下文处理，并为长视频持续反馈进度。
 - [查看完整工作流说明](docs/video-translate/视频翻译工作流说明书.md)。
 

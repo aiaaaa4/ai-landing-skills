@@ -30,7 +30,7 @@ VIDEO_SUFFIXES = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the fixed video subtitle workflow: ffmpeg -> OkFile -> Fun-ASR -> qwen-mt-plus helper segments -> subtitles."
+        description="Run the fixed video subtitle workflow: ffmpeg -> OkFile -> Fun-ASR -> selected translation provider -> subtitles."
     )
     parser.add_argument("media", type=Path, help="Input local video file. Direct audio input is not supported.")
     parser.add_argument(
@@ -89,7 +89,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--source-first", action="store_true", help="Put source line above Chinese line.")
     parser.add_argument("--orchestrator-model", default=None, help="Name of the AI model orchestrating this run, for the final chat summary.")
-    parser.add_argument("--translation-model", default="qwen-mt-plus", help="Name of the model used for segments.txt. Production default: qwen-mt-plus.")
+    parser.add_argument(
+        "--translation-provider",
+        choices=("qwen-mt-plus", "agent"),
+        default="qwen-mt-plus",
+        help="Initial translation path. Public default: qwen-mt-plus. Use agent for the current Codex/orchestrator model.",
+    )
+    parser.add_argument("--translation-model", default=None, help="Optional model label used only in the final run summary.")
     parser.add_argument(
         "--confirm-external-processing",
         action="store_true",
@@ -269,24 +275,25 @@ def count_word_table(work_dir: Path) -> int | None:
     return None
 
 
-def content_length_class(word_count: int | None) -> tuple[str, str]:
+def content_length_class(word_count: int | None, translation_provider: str = "qwen-mt-plus") -> tuple[str, str]:
+    route = "qwen-mt-plus with context-bound cache" if translation_provider == "qwen-mt-plus" else "Agent-native section translation with validated receipts"
     if word_count is None:
-        return "unknown", "Word count unavailable; use fixed qwen-mt-plus helper and rely on QA/export checks."
+        return "unknown", f"Word count unavailable; use {route} and rely on QA/export checks."
     if word_count <= NORMAL_WORD_LIMIT:
-        return "normal", f"{word_count} words <= {NORMAL_WORD_LIMIT}; use fixed qwen-mt-plus helper for segmentation/translation."
+        return "normal", f"{word_count} words <= {NORMAL_WORD_LIMIT}; use {route}."
     if word_count <= LONG_WORD_LIMIT:
-        return "long", f"{word_count} words is long content; use fixed qwen-mt-plus helper with cache/concurrency."
-    return "extra-long", f"{word_count} words > {LONG_WORD_LIMIT}; warn the user about cost/time and use fixed qwen-mt-plus helper with cache/concurrency."
+        return "long", f"{word_count} words is long content; use {route} and resume by section/cache."
+    return "extra-long", f"{word_count} words > {LONG_WORD_LIMIT}; warn the user about time/quota and use {route} with resumable progress."
 
 
-def print_segment_generation_policy(work_dir: Path) -> None:
+def print_segment_generation_policy(work_dir: Path, translation_provider: str) -> None:
     word_count = count_word_table(work_dir)
-    length_class, detail = content_length_class(word_count)
+    length_class, detail = content_length_class(word_count, translation_provider)
     print(f"ASR word count: {word_count if word_count is not None else 'unknown'}", flush=True)
     print(f"Content length class: {length_class}. {detail}", flush=True)
     print(
-        "Segment generation policy: fixed production path uses Alibaba Bailian qwen-mt-plus helper for segments.txt. "
-        "The orchestrating AI handles tool execution, timestamp alignment, QA repair, export, and the final chat summary.",
+        "Translation policy: public default uses Alibaba qwen-mt-plus; agent mode uses the current Codex/orchestrator "
+        "after validated whole-source analysis. Both paths still require semantic review, deterministic QA, and final QC.",
         flush=True,
     )
     write_json(
@@ -296,12 +303,36 @@ def print_segment_generation_policy(work_dir: Path) -> None:
             "length_class": length_class,
             "normal_word_limit": NORMAL_WORD_LIMIT,
             "long_word_limit": LONG_WORD_LIMIT,
-            "segment_generation_path": "fixed DashScope helper",
-            "fixed_helper_model": "qwen-mt-plus",
+            "translation_provider": translation_provider,
+            "segment_generation_path": "DashScope helper" if translation_provider == "qwen-mt-plus" else "Agent-native gate",
+            "fixed_helper_model": "qwen-mt-plus" if translation_provider == "qwen-mt-plus" else "",
             "helper_fallback_model": "",
-            "orchestrator_role": "tool execution, timestamp alignment, QA repair, subtitle export, and final chat summary",
+            "orchestrator_role": "translation plus review" if translation_provider == "agent" else "whole-source context, semantic review, QA, and export",
         },
     )
+
+
+def bind_translation_provider(work_dir: Path, provider: str) -> None:
+    config_path = work_dir / "workflow_config.json"
+    if config_path.exists():
+        config = read_json(config_path)
+        previous = str(config.get("translation_provider") or "qwen-mt-plus")
+        if previous != provider:
+            raise RuntimeError(
+                f"This run is already bound to translation_provider={previous}. "
+                "Use the same --translation-provider when resuming, or start a new --run-id."
+            )
+        return
+    meta_path = work_dir / "segment_generation_meta.json"
+    if meta_path.exists():
+        meta = read_json(meta_path)
+        previous = str(meta.get("translation_provider") or "qwen-mt-plus")
+        if previous != provider:
+            raise RuntimeError(
+                f"Existing translations in this run belong to translation_provider={previous}. "
+                "Start a new --run-id before switching providers."
+            )
+    write_json(config_path, {"schema_version": 1, "translation_provider": provider})
 
 
 
@@ -341,6 +372,8 @@ def ensure_ai_segments(
                 "Existing segments have no generation metadata. Use a new --run-id so translations cannot mix."
             )
         meta = read_json(meta_path)
+        if str(meta.get("translation_provider") or "qwen-mt-plus") != "qwen-mt-plus":
+            raise RuntimeError("Existing segments belong to Agent-native translation. Use a new --run-id for qwen-mt-plus.")
         context_hash = hashlib.sha256(translation_context.read_bytes()).hexdigest()
         if meta.get("translation_context_sha256") != context_hash:
             raise RuntimeError(
@@ -389,6 +422,54 @@ def ensure_ai_segments(
     if source_subtitle:
         cmd.extend(["--source-subtitle", str(source_subtitle)])
     run_step(cmd)
+
+
+def agent_translation_gate(work_dir: Path) -> bool:
+    translation_dir = work_dir / "global_review" / "agent-translation"
+    command = [
+        sys.executable,
+        "scripts/agent_translation.py",
+        "prepare",
+        "--source-manifest",
+        str(work_dir / "global_review" / "source-analysis" / "manifest.json"),
+        "--translation-context",
+        str(work_dir / "global_review" / "source-analysis" / "translation-context.json"),
+        "--out-dir",
+        str(translation_dir),
+    ]
+    run_step(command)
+    receipt = translation_dir / "agent-translation-receipt.json"
+    if not receipt.exists():
+        print("", flush=True)
+        print("Agent-native initial translation is required before semantic review.", flush=True)
+        print(f"- Follow the exact procedure in: {translation_dir / 'WORKFLOW.md'}", flush=True)
+        print(f"- Read every translation section listed in: {translation_dir / 'manifest.json'}", flush=True)
+        print(f"- Write translated sections under: {translation_dir / 'translated'}", flush=True)
+        print(f"- Complete: {translation_dir / 'agent-translation-receipt.template.json'}", flush=True)
+        print(f"- Save as: {receipt}", flush=True)
+        print("- Rerun the same command with --translation-provider agent after all sections are translated.", flush=True)
+        return False
+    status = run_step_status(
+        [
+            sys.executable,
+            "scripts/agent_translation.py",
+            "validate",
+            "--manifest",
+            str(translation_dir / "manifest.json"),
+            "--receipt",
+            str(receipt),
+            "--translated-dir",
+            str(translation_dir / "translated"),
+            "--out",
+            str(work_dir / "segments.txt"),
+            "--meta-out",
+            str(work_dir / "segment_generation_meta.json"),
+        ]
+    )
+    if status != 0:
+        print("Agent-native translation validation failed; semantic review will not start.", flush=True)
+        return False
+    return True
 
 
 def ensure_transcript(media: Path, transcript_dir: Path, language: str, confirm_external_processing: bool) -> None:
@@ -668,10 +749,16 @@ def write_run_summary(
     media_duration = transcript.get("duration")
 
     word_count = count_word_table(work_dir)
-    length_class, length_detail = content_length_class(word_count)
+    workflow_config = read_optional_json(work_dir / "workflow_config.json")
+    translation_provider = (
+        str(workflow_config.get("translation_provider") or "qwen-mt-plus")
+        if isinstance(workflow_config, dict)
+        else "qwen-mt-plus"
+    )
+    length_class, length_detail = content_length_class(word_count, translation_provider)
 
     helper_meta = read_optional_json(helper_meta_path)
-    if isinstance(helper_meta, dict):
+    if isinstance(helper_meta, dict) and str(helper_meta.get("translation_provider") or "qwen-mt-plus") == "qwen-mt-plus":
         translation_path = "helper_dashscope"
         effective_translation_model = str(helper_meta.get("model") or translation_model or "unknown")
         helper_detail = (
@@ -681,10 +768,16 @@ def write_run_summary(
         )
         source_reference = str(helper_meta.get("source_subtitle") or "none")
         reference_corrected_chunks = str(helper_meta.get("reference_corrected_chunks") or 0)
+    elif isinstance(helper_meta, dict) and helper_meta.get("translation_provider") == "agent":
+        translation_path = "agent_native"
+        effective_translation_model = str(helper_meta.get("model") or translation_model or orchestrator_model)
+        helper_detail = f"validated_segments={helper_meta.get('segments', 'unknown')}; receipt_bound=true"
+        source_reference = "inherited from source-analysis"
+        reference_corrected_chunks = "recorded in source-analysis"
     else:
-        translation_path = "main_orchestrator"
+        translation_path = "provided_segments"
         effective_translation_model = translation_model or orchestrator_model
-        helper_detail = "not used"
+        helper_detail = "generation metadata unavailable"
         source_reference = "none"
         reference_corrected_chunks = "0"
 
@@ -936,7 +1029,7 @@ def semantic_review_gate(work_dir: Path) -> bool:
     return True
 
 
-def source_analysis_gate(transcript_dir: Path, work_dir: Path, source_subtitle: Path | None) -> bool:
+def source_analysis_gate(transcript_dir: Path, work_dir: Path, source_subtitle: Path | None, translation_provider: str = "qwen-mt-plus") -> bool:
     analysis_dir = work_dir / "global_review" / "source-analysis"
     translation_context = analysis_dir / "translation-context.json"
     command = [
@@ -957,7 +1050,7 @@ def source_analysis_gate(transcript_dir: Path, work_dir: Path, source_subtitle: 
     receipt = analysis_dir / "source-analysis-receipt.json"
     if not receipt.exists():
         print("", flush=True)
-        print("Mandatory whole-source analysis is required before qwen-mt-plus translation.", flush=True)
+        print(f"Mandatory whole-source analysis is required before {translation_provider} translation.", flush=True)
         print(f"- Follow the exact procedure in: {analysis_dir / 'WORKFLOW.md'}", flush=True)
         print(f"- Read every source section listed in: {analysis_dir / 'manifest.json'}", flush=True)
         print(f"- Complete: {analysis_dir / 'source-analysis-receipt.template.json'}", flush=True)
@@ -1046,9 +1139,13 @@ def main() -> int:
         )
         return 2
     if not args.confirm_external_processing:
+        text_destination = (
+            "Alibaba qwen-mt-plus" if args.translation_provider == "qwen-mt-plus" else "the current Agent model service"
+        )
         print(
             "Refusing external processing without --confirm-external-processing. "
-            "This workflow uploads the selected audio to OkFile and sends audio/text to Alibaba services.",
+            f"This workflow uploads the selected audio to OkFile, sends its URL to Alibaba Fun-ASR, "
+            f"and processes transcript text with {text_destination}.",
             file=sys.stderr,
         )
         return 2
@@ -1067,6 +1164,7 @@ def main() -> int:
     work_dir = run_dir / "work"
     subtitles_dir = run_dir / "subtitles"
     work_dir.mkdir(parents=True, exist_ok=True)
+    bind_translation_provider(work_dir, args.translation_provider)
     asr_media = resolve_asr_media(media)
     source_subtitle = resolve_source_subtitle(media, args.source_subtitle)
     record_step_status(
@@ -1108,7 +1206,7 @@ def main() -> int:
     ensure_work_files(transcript_dir, work_dir)
     record_step_timing(work_dir, "word_stream", time.monotonic() - step_started)
     record_step_status(work_dir, "word_stream", "done")
-    print_segment_generation_policy(work_dir)
+    print_segment_generation_policy(work_dir, args.translation_provider)
 
     record_step_status(work_dir, "prompt", "running")
     step_started = time.monotonic()
@@ -1118,17 +1216,17 @@ def main() -> int:
 
     record_step_status(work_dir, "source_analysis", "running", "mandatory whole-source analysis before translation")
     step_started = time.monotonic()
-    if not source_analysis_gate(transcript_dir, work_dir, source_subtitle):
+    if not source_analysis_gate(transcript_dir, work_dir, source_subtitle, args.translation_provider):
         record_step_timing(work_dir, "source_analysis", time.monotonic() - step_started, "waiting for orchestrator source analysis")
         record_step_status(work_dir, "source_analysis", "waiting", "complete all source-analysis sections and receipt")
         return 3
     record_step_timing(work_dir, "source_analysis", time.monotonic() - step_started, "validated whole-source translation context")
     record_step_status(work_dir, "source_analysis", "done")
 
-    record_step_status(work_dir, "ai_segments", "running", "fixed qwen-mt-plus helper")
+    record_step_status(work_dir, "ai_segments", "running", f"translation_provider={args.translation_provider}")
     step_started = time.monotonic()
     maybe_copy_segments(args.segments, work_dir / "segments.txt")
-    if not args.segments:
+    if not args.segments and args.translation_provider == "qwen-mt-plus":
         ensure_ai_segments(
             work_dir,
             transcript_dir,
@@ -1137,11 +1235,15 @@ def main() -> int:
             source_subtitle,
             work_dir / "global_review" / "source-analysis" / "translation-context.json",
         )
+    elif not args.segments and not agent_translation_gate(work_dir):
+        record_step_timing(work_dir, "ai_segments", time.monotonic() - step_started, "waiting for Agent-native translation")
+        record_step_status(work_dir, "ai_segments", "waiting", "complete Agent translation sections and receipt")
+        return 4
     record_step_timing(
         work_dir,
         "ai_segments",
         time.monotonic() - step_started,
-        "copied provided segments" if args.segments else "generated with fixed qwen-mt-plus helper",
+        "copied provided segments" if args.segments else f"generated with {args.translation_provider}",
     )
     record_step_status(work_dir, "ai_segments", "done", "segments.txt ready")
 
@@ -1150,7 +1252,7 @@ def main() -> int:
     if not semantic_review_gate(work_dir):
         record_step_timing(work_dir, "semantic_review", time.monotonic() - step_started, "waiting for orchestrator review")
         record_step_status(work_dir, "semantic_review", "waiting", "complete all semantic review sections and receipt")
-        return 4
+        return 5
     record_step_timing(work_dir, "semantic_review", time.monotonic() - step_started, "validated full-document semantic review")
     record_step_status(work_dir, "semantic_review", "done")
 
@@ -1171,7 +1273,7 @@ def main() -> int:
     if not final_qc_gate(work_dir):
         record_step_timing(work_dir, "global_qc", time.monotonic() - step_started, "waiting for orchestrator QC")
         record_step_status(work_dir, "global_qc", "waiting", "complete final QC receipt")
-        return 5
+        return 6
     record_step_timing(work_dir, "global_qc", time.monotonic() - step_started, "validated full-document final QC")
     record_step_status(work_dir, "global_qc", "done")
 
@@ -1181,7 +1283,7 @@ def main() -> int:
     record_step_timing(work_dir, "export", time.monotonic() - step_started, "ASS/SRT export after both global gates")
     elapsed = time.monotonic() - started_at
     orchestrator_model = model_name_from_env(args.orchestrator_model)
-    translation_model = args.translation_model or "qwen-mt-plus"
+    translation_model = args.translation_model or ("current Agent model" if args.translation_provider == "agent" else "qwen-mt-plus")
     write_run_summary(
         work_dir,
         run_dir,

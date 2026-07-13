@@ -13,6 +13,7 @@ from transcribe_api import extract_audio, should_delete_prepared_audio  # noqa: 
 from generate_segments_with_dashscope import build_chunks  # noqa: E402
 from source_subtitle_reference import load_source_subtitle, references_by_asr_segment  # noqa: E402
 from video_to_subtitles import (  # noqa: E402
+    bind_translation_provider,
     cleanup_workflow_inputs,
     default_subtitle_tag,
     resolve_asr_media,
@@ -178,6 +179,23 @@ class MediaInputTest(unittest.TestCase):
         subtitle.write_text("reference v2", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "different source subtitle"):
             ensure_ai_segments(work_dir, transcript_dir, "en", "test", subtitle, translation_context)
+
+    def test_run_cannot_mix_translation_providers(self):
+        work_dir = self.tmp_dir / "work"
+        work_dir.mkdir()
+        bind_translation_provider(work_dir, "agent")
+        with self.assertRaisesRegex(RuntimeError, "already bound"):
+            bind_translation_provider(work_dir, "qwen-mt-plus")
+
+    def test_legacy_qwen_metadata_prevents_agent_switch(self):
+        work_dir = self.tmp_dir / "work"
+        work_dir.mkdir()
+        (work_dir / "segment_generation_meta.json").write_text(
+            json.dumps({"model": "qwen-mt-plus"}),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(RuntimeError, "translation_provider=qwen-mt-plus"):
+            bind_translation_provider(work_dir, "agent")
 
     def test_keeps_video_when_no_downloaded_audio_exists(self):
         video = self.tmp_dir / "lesson.mp4"

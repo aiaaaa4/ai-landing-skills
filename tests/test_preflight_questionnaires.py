@@ -17,12 +17,18 @@ class PreflightQuestionnaireTest(unittest.TestCase):
         text = output(ROOT / "skills/video-translate/scripts/preflight.py")
         self.assertIn("默认翻译为简体中文", text)
         self.assertIn("固定输出中文在上、原文在下的双语 ASS 和 SRT", text)
+        self.assertIn("qwen-mt-plus", text)
+        self.assertIn("Codex 翻译", text)
+        self.assertIn("https://www.okfile.com/en/account/api-keys", text)
+        self.assertIn("https://help.aliyun.com/zh/model-studio/get-api-key", text)
         self.assertNotIn("简体中文、繁体中文还是双语", text)
 
     def test_combined_questionnaire_collects_all_three_skills_once(self):
         text = output(ROOT / "skills/video-download/scripts/preflight.py", "--mode", "combined")
         self.assertIn("下载质量", text)
         self.assertIn("翻译目标与交付", text)
+        self.assertIn("翻译模型", text)
+        self.assertIn("Codex 翻译", text)
         self.assertIn("发布封装", text)
         self.assertIn("确认默认设置，并同意外发处理", text)
 

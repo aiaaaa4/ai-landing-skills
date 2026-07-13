@@ -156,7 +156,7 @@ def prepare(args: argparse.Namespace) -> int:
 
 1. Read every section in manifest order before completing the receipt. If `screen_context` is present in the manifest, read it too.
 2. Build one whole-video outline and determine the actual domain, named entities, recurring terminology, and ambiguous words from the complete source transcript. Consult `references/trading_glossary.md` and `references/term_repair_rules.json` only when the video's actual domain makes them relevant.
-3. `domains_prompt` must be an English instruction suitable for Qwen-MT domain prompting. It must describe this video's actual subject and translation style.
+3. `domains_prompt` must be an English translation instruction that describes this video's actual subject and style. Qwen-MT receives it through `domains`; Agent-native translation reads the same validated context directly.
 4. Add high-confidence source-to-Chinese mappings to `terminology`. For ambiguous terms such as `model`, add a decision only when the complete context establishes the intended sense.
 5. Add reusable source/target sentence pairs to `tm_list` only when they are supported by the source; never invent translation memories.
 6. Copy `source-analysis-receipt.template.json` to `source-analysis-receipt.json`, fill every field, mark every section passed, and keep all input hashes unchanged.
