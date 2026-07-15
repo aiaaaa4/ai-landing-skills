@@ -4,10 +4,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 from common import Segment, align_segments, parse_segments, read_json, write_json
+from stage_directory import reset_stage_directory
 
 
 FINAL_QC_CHECKS = {
@@ -52,23 +52,6 @@ def render_segments(segments: list[Segment], *, preserve_indices: bool = False) 
             "[/SEG]\n"
         )
     return "\n".join(blocks).rstrip() + "\n"
-
-
-def reset_generated_dir(path: Path) -> None:
-    if path.exists():
-        for child in path.iterdir():
-            if child.name in {
-                "reviewed",
-                "semantic-review-receipt.json",
-                "global-context.json",
-                "final-qc-receipt.json",
-            }:
-                continue
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
-    path.mkdir(parents=True, exist_ok=True)
 
 
 def build_sections(
@@ -130,7 +113,11 @@ def prepare_semantic(args: argparse.Namespace) -> int:
     word_table_path = args.word_table.resolve()
     out_dir = args.out_dir.resolve()
     source_context_path = args.source_context.resolve()
-    reset_generated_dir(out_dir)
+    reset_stage_directory(
+        out_dir,
+        "semantic-review",
+        preserve={"reviewed", "semantic-review-receipt.json", "global-context.json"},
+    )
     segments = parse_segments(segments_path.read_text(encoding="utf-8"))
     word_table = read_json(word_table_path)
     _aligned, failures = align_segments(word_table, segments)
@@ -287,7 +274,11 @@ def prepare_qc(args: argparse.Namespace) -> int:
     qa_report_path = args.qa_report.resolve()
     global_context_path = args.global_context.resolve()
     out_dir = args.out_dir.resolve()
-    reset_generated_dir(out_dir)
+    reset_stage_directory(
+        out_dir,
+        "final-qc",
+        preserve={"reviewed", "final-qc-receipt.json"},
+    )
     segments = parse_segments(segments_path.read_text(encoding="utf-8"))
     sections = build_sections(
         segments,

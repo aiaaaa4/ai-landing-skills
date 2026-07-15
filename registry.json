@@ -18,11 +18,22 @@
       "skill_id": "aiaaaa4.video-download",
       "display_name": "一键加速视频下载",
       "path": "skills/video-download",
-      "version": "1.2.5",
-      "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
+      "version": "1.2.6",
+      "platforms": [
+        "github",
+        "clawhub",
+        "skills.sh",
+        "skillhub",
+        "skillsmp"
+      ],
       "clawhub": {
         "package": "@aiaaaa4/video-download",
-        "topics": ["video", "download", "yt-dlp", "aiaaaa4"]
+        "topics": [
+          "video",
+          "download",
+          "yt-dlp",
+          "aiaaaa4"
+        ]
       }
     },
     {
@@ -31,11 +42,22 @@
       "skill_id": "aiaaaa4.video-translate",
       "display_name": "人工级视频字幕翻译",
       "path": "skills/video-translate",
-      "version": "1.5.1",
-      "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
+      "version": "1.5.2",
+      "platforms": [
+        "github",
+        "clawhub",
+        "skills.sh",
+        "skillhub",
+        "skillsmp"
+      ],
       "clawhub": {
         "package": "@aiaaaa4/video-translate",
-        "topics": ["subtitle", "translation", "video", "aiaaaa4"]
+        "topics": [
+          "subtitle",
+          "translation",
+          "video",
+          "aiaaaa4"
+        ]
       }
     },
     {
@@ -44,11 +66,23 @@
       "skill_id": "aiaaaa4.video-publish",
       "display_name": "极简视频封装",
       "path": "skills/video-publish",
-      "version": "1.0.8",
-      "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
+      "version": "1.0.9",
+      "platforms": [
+        "github",
+        "clawhub",
+        "skills.sh",
+        "skillhub",
+        "skillsmp"
+      ],
       "clawhub": {
         "package": "@aiaaaa4/video-publish",
-        "topics": ["video", "ffmpeg", "cover", "disclaimer", "aiaaaa4"]
+        "topics": [
+          "video",
+          "ffmpeg",
+          "cover",
+          "disclaimer",
+          "aiaaaa4"
+        ]
       }
     },
     {
@@ -58,10 +92,21 @@
       "display_name": "网盘文件管理",
       "path": "skills/cloud-file-mgmt",
       "version": "1.2.2",
-      "platforms": ["github", "clawhub", "skills.sh", "skillhub", "skillsmp"],
+      "platforms": [
+        "github",
+        "clawhub",
+        "skills.sh",
+        "skillhub",
+        "skillsmp"
+      ],
       "clawhub": {
         "package": "@aiaaaa4/cloud-file-mgmt",
-        "topics": ["cloud-storage", "alist", "webdav", "aiaaaa4"]
+        "topics": [
+          "cloud-storage",
+          "alist",
+          "webdav",
+          "aiaaaa4"
+        ]
       }
     }
   ]

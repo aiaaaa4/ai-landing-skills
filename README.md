@@ -24,7 +24,7 @@
 
 ### [一键加速视频下载](skills/video-download)
 
-**`aiaaaa4.video-download` · v1.2.5 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
+**`aiaaaa4.video-download` · v1.2.6 · [查看源码](skills/video-download) · [ClawHub](https://clawhub.ai/aiaaaa4/video-download)**
 
 把一个视频链接交给 Agent，先看清可下载的画质、编码、大小和容器，再决定下载。适合希望保留选择权、又不想手动研究 `yt-dlp` 参数的人。
 
@@ -39,7 +39,7 @@
 
 ### [人工级视频字幕翻译](skills/video-translate)
 
-**`aiaaaa4.video-translate` · v1.5.1 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
+**`aiaaaa4.video-translate` · v1.5.2 · [查看源码](skills/video-translate) · [ClawHub](https://clawhub.ai/aiaaaa4/video-translate)**
 
 面向课程、培训、访谈、演示和录屏等本地视频，把“识别出字幕”升级为“能直接交付的双语字幕”。编排模型先通读完整源文，生成领域提示、术语和歧义判断供翻译模型初译；之后再次通读原文与译文，完成重译审校、语义重分段、确定性 QA 和最终全文 QC。
 
@@ -50,19 +50,25 @@
 
 ### [极简视频封装](skills/video-publish)
 
-**`aiaaaa4.video-publish` · v1.0.8 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
+**`aiaaaa4.video-publish` · v1.0.9 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
 
-为已经下载或翻译完成的本地视频快速生成发布素材。它从视频前半段分区随机抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒固定免责声明，并优先通过音频内容匹配生成时间轴准确的发布版 SRT；默认不重新编码视频主体。
+为已经下载或翻译完成的本地视频快速生成 B 站发布素材。它在视频开头轻量添加 3 秒固定免责声明，并优先通过音频内容匹配，把双语 SRT 转为时间轴准确的发布版双语 BCC；默认不重新编码视频主体。
 
-- 封面保存为 `抽帧封面1.png` 至 `抽帧封面5.png`，不再拼进视频；字幕烧录、水印和其他完整重编码功能保留为高级模式。
+- 抽取 `抽帧封面1.png` 至 `抽帧封面5.png` 默认关闭；字幕烧录、水印和其他完整重编码功能保留为高级模式。
 - 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。
 - 缺少 FFmpeg 时会停止并提示用户自行安装可信版本；Skill 不调用 Homebrew、`sudo` 或其他包管理器。
 
 ### 三 Skill 组合工作流
 
-`video-download → video-translate → video-publish` 共用一个媒体项目目录。下载阶段把独立音频和原语言字幕放进隐藏输入区；翻译阶段始终用 Fun-ASR 取得词级时间戳，并用原字幕校正内容，成功后删除临时音频和原字幕；发布阶段增加免责声明、抽取封面，并按实际语音偏移生成发布版 SRT。
+`video-download → video-translate → video-publish` 共用一个媒体项目目录。下载阶段把独立音频和原语言字幕放进隐藏输入区；翻译阶段始终用 Fun-ASR 取得词级时间戳，并用原字幕校正内容，成功后删除临时音频和原字幕；发布阶段增加免责声明，并按实际语音偏移把双语 SRT 转为发布版双语 BCC。抽帧封面默认关闭，可按需开启。
 
-正常完成后的可见交付为：原版视频和发布版视频 `2` 个；双语 ASS、双语 SRT、发布版双语 SRT `3` 个；抽帧封面 `5` 张，加上平台提供的原始封面时共 `6` 张；独立音频和原语言字幕均为 `0`。运行记录与时间线清单保留在隐藏 `.work/`，不污染交付目录。
+正常完成后的可见交付为：原版视频和发布版视频 `2` 个；双语 ASS、双语 SRT、发布版双语 BCC `3` 个；原始封面 `1` 张。开启抽帧封面后会额外生成 `5` 张候选；独立音频和原语言字幕均为 `0`。运行记录与时间线清单保留在隐藏 `.work/`，不污染交付目录。
+
+### [视频下载、字幕翻译与发布 Flow](flows/video-production)
+
+组合 Flow 只负责编排，不复制三个 Skill 的代码。它固定按 `video-download → video-translate → video-publish` 顺序运行，共用一个媒体项目目录，并通过 `flows/video-production/flow.json` 锁定三个组件的当前版本。任意组件 Skill 更新后，运行 `python3 tools/sync_video_flow.py --write` 更新 Flow 依赖锁；CI 会阻止 Flow 使用旧版本。
+
+Flow 默认下载最高可用质量、输出简体中文双语 ASS/SRT、添加 3 秒免责声明并生成发布版双语 BCC；抽帧封面、水印、烧录字幕、裁切、滤镜和全片重编码均保持关闭，除非用户明确开启。
 
 ### [网盘文件管理](skills/cloud-file-mgmt)
 
@@ -134,8 +140,10 @@ skills.sh 异步刷新 / SkillHub 手动维护或等待镜像
 skills/
   video-download/       # yt-dlp + FFmpeg 的受确认下载流程
   video-translate/      # 本地视频的高质量字幕翻译流程
-  video-publish/        # FFmpeg 的独立抽帧封面与 3 秒免责声明流程
+  video-publish/        # B 站 3 秒免责声明、可选抽帧封面与 BCC 字幕流程
   cloud-file-mgmt/      # Mac + AList WebDAV 的多网盘管理流程
+flows/
+  video-production/     # 三个视频 Skill 的依赖锁定组合流程
 docs/                   # 面向人的产品与发布说明
 tests/                  # 可重复运行的回归测试
 tools/                  # 校验与独立发布工具

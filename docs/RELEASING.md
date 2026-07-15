@@ -43,10 +43,18 @@ The private `rithmic-signup` repository follows the same backup rule, but it is 
    ```
 
    Do not put a version in `SKILL.md`, package files, or separate release notes.
+   When the changed skill is one of the three video Flow dependencies, also run:
+
+   ```bash
+   python3 tools/sync_video_flow.py --write
+   ```
+
+   The Flow is an orchestration layer, not a copy of the component scripts. Its `flow.json` must lock the exact versions from `registry.json`.
 3. Run local checks:
 
    ```bash
    python3 tools/validate_repo.py
+   python3 tools/sync_video_flow.py --check
    python3 -m unittest discover -s tests
    python3 tools/release_skill.py --skill <slug> --changelog "<summary>" --dry-run
    ```
@@ -100,6 +108,12 @@ The private `rithmic-signup` repository follows the same backup rule, but it is 
 - ClawHub must pass before completion. SkillHub requires all of its own gates to pass before listing.
 - skills.sh may retain a medium capability warning for a downloader that reads third-party metadata or a translator that sends explicitly approved text to a fixed cloud API. Document and constrain that boundary; do not delete the core feature solely to force a green badge.
 - Every scanner-driven behavior change receives a version bump, tests, GitHub CI, a canonical ClawHub release, and another platform review.
+
+### Composite Flow Changes
+
+- A component Skill change is authoritative in `skills/<slug>/`; update the Flow lock with `tools/sync_video_flow.py --write` in the same commit.
+- A Flow-only orchestration change belongs in `flows/video-production/FLOW.md` and `flow.json`; do not patch component Skill code indirectly.
+- If the Flow changes its user-facing defaults or handoff contract, increment its `flow.json` version and run the full test suite.
 
 ## Local Boundary
 

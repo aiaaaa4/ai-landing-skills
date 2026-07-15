@@ -1,6 +1,6 @@
 ---
 name: video-publish
-description: 使用本地 FFmpeg 抽取 5 张独立投稿封面，在视频开头轻量添加 3 秒免责声明，并通过音频内容匹配生成时间轴准确的发布版 SRT；默认不重编码原视频主体。Use when preparing a local video for publishing, generating five cover candidates, prepending a disclaimer, or creating a release SRT aligned to the actual source-audio offset.
+description: 面向 B 站使用本地 FFmpeg 在视频开头轻量添加 3 秒免责声明，并将双语 SRT 转为时间轴准确的发布版 BCC；抽取 5 张独立封面默认关闭，视频主体默认不重编码。Use when preparing a local video for Bilibili, optionally generating five cover candidates, prepending a disclaimer, or creating release BCC captions aligned to the actual source-audio offset.
 permissions:
   - file_read
   - file_write
@@ -18,7 +18,7 @@ metadata:
 
 作者 / 工作流设计：`AI落地第四声`。这是纯本地 FFmpeg 后处理：不上传视频、不读取凭据、不调用云端 API。
 
-默认流程是：从视频前半段分区随机抽取 `5` 张独立投稿封面，保存为 `抽帧封面1.png` 至 `抽帧封面5.png`；同时在视频开头添加固定免责声明 `3` 秒。封面只作为独立图片交付，不再拼进视频；只编码免责声明片头，原视频主体使用码流复制。若用户提供与源视频匹配的双语 SRT，则优先通过连续音频帧匹配探测原始语音在发布版中的实际起点，再生成一个时间轴匹配的发布版 SRT，不修改源字幕。
+本 Skill 暂时按 B 站发布要求设计。默认在视频开头添加固定免责声明 `3` 秒，只编码免责声明片头，原视频主体使用码流复制。若用户提供与源视频匹配的双语 SRT，则优先通过连续音频帧匹配探测原始语音在发布版中的实际起点，再生成一个时间轴匹配的发布版双语 BCC，不修改源 SRT。抽取 `5` 张独立投稿封面默认关闭，只有用户明确开启时才生成 `抽帧封面1.png` 至 `抽帧封面5.png`。
 
 ## Environment
 
@@ -37,9 +37,10 @@ Run `python scripts/preflight.py` and send stdout verbatim. Do not invent, parap
 每次任务都先通过对话确认以下内容：
 
 1. **免责声明**：默认使用 `assets/disclaimer-zh-en-1920x1080.png` 并显示 `3` 秒；如用户不需要免责声明则不要生成发布版视频。
-2. **输出**：确认发布版 MP4 的绝对路径及封面图片所在文件夹；已有同名文件时必须再次确认覆盖。
-3. **外挂字幕**：如果项目内已有与源视频匹配的 SRT，确认是否同时生成发布版外挂字幕；这是时间轴平移，不是字幕烧录，也不触发全片重编码。
-4. **高级处理**：只有用户明确要求字幕烧录、水印、裁切或画面滤镜时才使用全片重编码，并提前说明画质、体积和耗时影响。
+2. **封面候选**：默认关闭；只有用户明确开启时才抽取 5 张 PNG。
+3. **输出**：确认发布版 MP4 的绝对路径；已有同名文件时必须再次确认覆盖。
+4. **外挂字幕**：如果项目内已有与源视频匹配的双语 SRT，默认生成时间轴匹配的发布版双语 BCC；这是时间轴平移和格式转换，不是字幕烧录，也不触发全片重编码。
+5. **高级处理**：只有用户明确要求字幕烧录、水印、裁切或画面滤镜时才使用全片重编码，并提前说明画质、体积和耗时影响。
 
 ## Long-Running Execution
 
@@ -48,11 +49,11 @@ Run `python scripts/preflight.py` and send stdout verbatim. Do not invent, parap
 - A completion notification does not wake or resume an ended Agent turn. Never promise automatic continuation after a notification.
 - End only after delivery, actionable failure, or a genuine user decision gate.
 
-YouTube、B站等平台的投稿封面应同时使用选中的独立 PNG；不要假设平台一定采用视频第一帧。
+用户开启抽帧封面后，B 站投稿时应单独上传选中的 PNG；不要假设平台一定采用视频第一帧。
 
 ## Lightweight Run
 
-在视频前半段分区随机抽取五张候选封面，直接放进指定项目文件夹：
+只有用户明确开启时，才在视频前半段分区随机抽取五张候选封面并放进指定项目文件夹：
 
 ```bash
 python scripts/extract_covers.py \
@@ -69,7 +70,7 @@ python scripts/prepend_intro.py \
   --output "/absolute/path/source-发布版.mp4"
 ```
 
-传入 `--subtitle` 后，默认按视频命名生成 `source-发布版.中英双语字幕.srt`，并在 `.work/publish/` 生成时间线清单。清单同时记录用户选择的免责声明时长、实际 `content_offset_seconds` 及偏移依据；发布版 SRT 使用实际语音偏移平移全部 cue。使用 `--preview-content-seconds 8` 可先输出约 11 秒的短预览。默认只支持将免责声明轻量拼接到 H.264 `yuv420p` + AAC MP4；其他编码格式应明确告知用户并改用完整重编码。
+传入 `--subtitle` 后，默认按视频命名生成 `source-发布版.中英双语字幕.bcc`，并在 `.work/publish/` 生成时间线清单。清单同时记录用户选择的免责声明时长、实际 `content_offset_seconds` 及偏移依据；发布版 BCC 使用实际语音偏移校准全部 cue，并保留每条字幕“中文在上、原文在下”的换行内容。使用 `--preview-content-seconds 8` 可先输出约 11 秒的短预览。默认只支持将免责声明轻量拼接到 H.264 `yuv420p` + AAC MP4；其他编码格式应明确告知用户并改用完整重编码。
 
 ## Advanced Run
 
@@ -86,4 +87,4 @@ python scripts/prepend_intro.py \
 
 ## Delivery
 
-完成后报告：`抽帧封面1.png` 至 `抽帧封面5.png` 的位置、免责声明时长、正文实际偏移、发布版视频路径、发布版 SRT 路径（如生成）、时间线清单路径，以及原视频主体是否重编码。默认轻量流程必须明确报告 `source_video_reencoded: false`。
+完成后报告：免责声明时长、正文实际偏移、发布版视频路径、发布版 BCC 路径（如生成）、时间线清单路径、可选封面路径（如用户开启），以及原视频主体是否重编码。默认轻量流程必须明确报告 `source_video_reencoded: false`。

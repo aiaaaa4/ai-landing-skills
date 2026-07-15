@@ -2,7 +2,7 @@
 # Author information is for display and source identification, not an additional license restriction.
 interface:
   display_name: "人工级视频字幕翻译"
-  short_description: "用固定词级转写、可选 Qwen/Codex 翻译、全文审校和最终 QC 生成双语字幕。"
-  default_prompt: "仅在用户明确请求本地视频字幕翻译时使用 $video-translate；用户直接提供音频必须拒绝。原样发送 scripts/preflight.py 的固定问卷：OkFile + Fun-ASR 固定，初译默认 qwen-mt-plus，也可由用户明确选择当前 Codex/Agent 模型。译前必须通读完整源文建立上下文；初译后再次通读原文与译文完成重译审校、语义重分段和最终全文 QC。长任务必须前台轮询，禁止结束轮次等待通知。"
+  short_description: "经确认把视频音频交给 OkFile/Fun-ASR，并用 Qwen 或当前 Agent 生成和全文审校双语字幕。"
+  default_prompt: "仅在用户明确请求本地视频字幕翻译时使用 $video-translate；用户直接提供音频必须拒绝。原样发送 scripts/preflight.py 的固定问卷：OkFile + Fun-ASR 固定，初译默认 qwen-mt-plus，也可由用户明确选择当前 Agent 编排模型。译前必须通读完整源文建立上下文；初译后再次通读原文与译文完成重译审校、语义重分段和最终全文 QC。长任务必须前台轮询，禁止结束轮次等待通知。"
 policy:
   allow_implicit_invocation: false

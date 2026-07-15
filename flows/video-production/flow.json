@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "flow_id": "aiaaaa4.video-production-flow",
+  "display_name": "视频下载、字幕翻译与发布工作流",
+  "version": "1.0.0",
+  "path": "flows/video-production",
+  "source_of_truth": "skills/<slug>",
+  "dependencies": {
+    "aiaaaa4.video-download": {
+      "path": "skills/video-download",
+      "version": "1.2.6"
+    },
+    "aiaaaa4.video-translate": {
+      "path": "skills/video-translate",
+      "version": "1.5.2"
+    },
+    "aiaaaa4.video-publish": {
+      "path": "skills/video-publish",
+      "version": "1.0.9"
+    }
+  },
+  "defaults": {
+    "download_quality": "best_available",
+    "source_language": "en",
+    "target_language": "zh-CN",
+    "subtitle_delivery": [
+      "ass",
+      "srt"
+    ],
+    "publish_disclaimer_seconds": 3,
+    "publish_covers": false,
+    "publish_subtitle_format": "bcc",
+    "full_video_reencode": false
+  }
+}

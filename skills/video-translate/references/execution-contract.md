@@ -98,7 +98,7 @@ The fixed questionnaire covers these fields:
 
 1. Source language: default English (`--language en`). Common supported hints: French (`fr`), Spanish (`es`), Italian (`it`). If uncertain, infer and state the assumption.
 2. Target language: default Simplified Chinese. Bilingual ASS/SRT is the fixed output structure, not a competing target-language option.
-3. Translation provider: default A is qwen-mt-plus for stable, cost-effective API translation. Option B is current Codex / Agent translation and is activated only by an explicit “Codex 翻译” answer plus `--translation-provider agent`.
+3. Translation provider: default A is qwen-mt-plus for stable, cost-effective API translation. Option B is current Agent translation and is activated only by an explicit “Agent 大模型翻译” answer plus `--translation-provider agent`. If the current environment offers it, Codex with GPT-5.6 is the recommended high-quality Agent path.
 4. Screen context: ask whether the video contains dense or important visible text, PPT/slides, charts, software UI, code, signs, or meaningful images not fully spoken aloud. Keep it off by default; enabling it may increase time and cost.
 5. Subtitle output directory: default to the project-level `outputs/` directory. Ask the user to confirm this default; if they want a different location, ask for the absolute or project-relative path and pass it with `--outputs-dir "<path>"`.
 6. External-processing consent: state that audio is uploaded only to `https://www.okfile.com` and its URL is sent to Alibaba Fun-ASR. In qwen mode subtitle text is also sent to Alibaba qwen-mt-plus; in Agent mode it is handled by the current Agent model service. Proceed only after explicit consent.

@@ -18,7 +18,9 @@ class PreflightQuestionnaireTest(unittest.TestCase):
         self.assertIn("默认翻译为简体中文", text)
         self.assertIn("固定输出中文在上、原文在下的双语 ASS 和 SRT", text)
         self.assertIn("qwen-mt-plus", text)
-        self.assertIn("Codex 翻译", text)
+        self.assertIn("Agent 大模型翻译", text)
+        self.assertIn("视频翻译工作流说明书", text)
+        self.assertIn("GPT-5.6", text)
         self.assertIn("https://www.okfile.com/en/account/api-keys", text)
         self.assertIn("https://help.aliyun.com/zh/model-studio/get-api-key", text)
         self.assertNotIn("简体中文、繁体中文还是双语", text)
@@ -28,14 +30,18 @@ class PreflightQuestionnaireTest(unittest.TestCase):
         self.assertIn("下载质量", text)
         self.assertIn("翻译目标与交付", text)
         self.assertIn("翻译模型", text)
-        self.assertIn("Codex 翻译", text)
+        self.assertIn("Agent 大模型翻译", text)
         self.assertIn("发布封装", text)
+        self.assertIn("发布版双语 BCC", text)
+        self.assertIn("默认关闭抽帧封面", text)
         self.assertIn("确认默认设置，并同意外发处理", text)
 
     def test_publish_questionnaire_has_lightweight_defaults(self):
         text = output(ROOT / "skills/video-publish/scripts/preflight.py")
         self.assertIn("3 秒", text)
         self.assertIn("5 张独立 PNG", text)
+        self.assertIn("默认关闭", text)
+        self.assertIn("发布版双语 BCC", text)
         self.assertIn("默认不加水印、不烧录字幕", text)
 
 

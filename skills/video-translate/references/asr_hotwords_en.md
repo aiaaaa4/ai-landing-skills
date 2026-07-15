@@ -18,7 +18,7 @@ Maintenance rules:
 
 ## Maintenance SOP
 
-Use this file as the local source of truth for ASR hotwords. The remote Alibaba vocabulary should mirror this list after approved maintenance.
+Use this file as the local source of truth for ASR hotwords. Remote vocabulary maintenance is not part of a normal translation run. Before any remote update, obtain a separate explicit confirmation that names the Alibaba workspace and vocabulary ID, explains that the full vocabulary is replaced, and records or exports the current remote entries for rollback. The remote Alibaba vocabulary should mirror this list only after that approved maintenance.
 
 ### Decide ASR Hotword vs Translation/QC Rule
 
@@ -61,6 +61,8 @@ Do not promote one-off common English words unless a repeated ASR failure proves
 - Update the remote ASR vocabulary only after collecting a small stable batch of candidates, unless a high-impact proper noun or ticker must be fixed immediately.
 
 ### Update Procedure
+
+Do not perform these steps from an ordinary subtitle request. First show the proposed additions, workspace ID, vocabulary ID, overwrite behavior, and rollback copy, then obtain explicit confirmation for this remote state change.
 
 1. Add approved terms to this file.
 2. Query the remote vocabulary.

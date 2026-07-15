@@ -11,7 +11,7 @@ import tempfile
 from fractions import Fraction
 from pathlib import Path
 
-from subtitle_timeline import default_subtitle_output, shift_srt_file
+from subtitle_timeline import default_subtitle_output, write_bcc_file
 
 
 DEFAULT_DISCLAIMER = Path(__file__).resolve().parents[1] / "assets" / "disclaimer-zh-en-1920x1080.png"
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disclaimer-image", type=Path, default=DEFAULT_DISCLAIMER, help="Disclaimer image, defaults to the bundled asset.")
     parser.add_argument("--output", type=Path, required=True, help="Output MP4 path.")
     parser.add_argument("--subtitle", type=Path, default=None, help="Optional source-timeline bilingual SRT to shift for the packaged video.")
-    parser.add_argument("--subtitle-output", type=Path, default=None, help="Optional shifted SRT path; defaults to the packaged-video naming rule.")
+    parser.add_argument("--subtitle-output", type=Path, default=None, help="Optional release BCC path; defaults to the packaged-video naming rule.")
     parser.add_argument("--timeline-output", type=Path, default=None, help="Optional timeline manifest path; defaults beside the packaged video.")
     parser.add_argument("--disclaimer-seconds", type=float, default=3.0, help="Disclaimer duration, default 3 seconds.")
     parser.add_argument("--preview-content-seconds", type=float, default=None, help="Copy only this many seconds of source content for a preview.")
@@ -105,8 +105,8 @@ def validate_args(args: argparse.Namespace) -> tuple[Path, Path, Path, Path | No
         raise RuntimeError("Output path must differ from the source video.")
     if output.suffix.lower() != ".mp4":
         raise RuntimeError("Output must use the .mp4 extension.")
-    if subtitle_output and subtitle_output.suffix.lower() != ".srt":
-        raise RuntimeError("Subtitle output must use the .srt extension.")
+    if subtitle_output and subtitle_output.suffix.lower() != ".bcc":
+        raise RuntimeError("Subtitle output must use the .bcc extension.")
     if timeline_output.suffix.lower() != ".json":
         raise RuntimeError("Timeline output must use the .json extension.")
     if output.exists() and not args.overwrite:
@@ -508,16 +508,17 @@ def main() -> int:
         )
     if subtitle and subtitle_output:
         subtitle_output.parent.mkdir(parents=True, exist_ok=True)
-        shift_srt_file(subtitle, subtitle_output, content_offset)
+        write_bcc_file(subtitle, subtitle_output, content_offset)
     timeline_output.parent.mkdir(parents=True, exist_ok=True)
     timeline_output.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "source_video": str(source),
                 "packaged_video": str(output),
                 "source_subtitle": str(subtitle) if subtitle else None,
                 "packaged_subtitle": str(subtitle_output) if subtitle_output else None,
+                "packaged_subtitle_format": "bcc" if subtitle_output else None,
                 "disclaimer_seconds": args.disclaimer_seconds,
                 "content_offset_seconds": content_offset,
                 "offset_basis": offset_basis,

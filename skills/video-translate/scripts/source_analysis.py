@@ -4,11 +4,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 from generate_segments_with_dashscope import SegmentChunk, build_chunks
 from source_subtitle_reference import load_source_subtitle, references_by_asr_segment
+from stage_directory import reset_stage_directory
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -47,22 +47,14 @@ def render_chunks(chunks: list[SegmentChunk], start_index: int) -> str:
     return "\n".join(blocks).rstrip() + "\n"
 
 
-def reset_generated(path: Path) -> None:
-    if path.exists():
-        for child in path.iterdir():
-            if child.name in {"source-analysis-receipt.json", "translation-context.json"}:
-                continue
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
-    path.mkdir(parents=True, exist_ok=True)
-
-
 def prepare(args: argparse.Namespace) -> int:
     transcript_path = args.transcript.resolve()
     out_dir = args.out_dir.resolve()
-    reset_generated(out_dir)
+    reset_stage_directory(
+        out_dir,
+        "source-analysis",
+        preserve={"source-analysis-receipt.json", "translation-context.json"},
+    )
     transcript = read_json(transcript_path)
     if not isinstance(transcript, dict):
         raise RuntimeError("Transcript must be a JSON object.")

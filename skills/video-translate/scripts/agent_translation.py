@@ -5,10 +5,10 @@ import argparse
 import hashlib
 import json
 import re
-import shutil
 from pathlib import Path
 
 from common import Segment, parse_segments
+from stage_directory import reset_stage_directory
 
 
 SOURCE_RE = re.compile(
@@ -38,18 +38,6 @@ def manifest_digest(manifest: dict) -> str:
     canonical = {key: value for key, value in manifest.items() if key != "manifest_sha256"}
     payload = json.dumps(canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return sha256_bytes(payload.encode("utf-8"))
-
-
-def reset_generated(path: Path) -> None:
-    if path.exists():
-        for child in path.iterdir():
-            if child.name in {"translated", "agent-translation-receipt.json"}:
-                continue
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
-    path.mkdir(parents=True, exist_ok=True)
 
 
 def parse_source_blocks(path: Path, start: int, end: int) -> list[Segment]:
@@ -106,7 +94,11 @@ def prepare(args: argparse.Namespace) -> int:
     if context.get("source_manifest_sha256") != source_manifest.get("manifest_sha256"):
         raise RuntimeError("Translation context does not match the current source manifest.")
 
-    reset_generated(out_dir)
+    reset_stage_directory(
+        out_dir,
+        "agent-translation",
+        preserve={"translated", "agent-translation-receipt.json"},
+    )
     sections_dir = out_dir / "sections"
     sections_dir.mkdir(parents=True, exist_ok=True)
     sections: list[dict] = []

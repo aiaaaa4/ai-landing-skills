@@ -57,7 +57,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep downloader-created files under .work/input after successful export for debugging.",
     )
-    parser.add_argument("--segments", type=Path, default=None, help="Optional completed segments.txt to copy in.")
     parser.add_argument(
         "--subtitle-tag",
         dest="subtitle_tag",
@@ -472,7 +471,13 @@ def agent_translation_gate(work_dir: Path) -> bool:
     return True
 
 
-def ensure_transcript(media: Path, transcript_dir: Path, language: str, confirm_external_processing: bool) -> None:
+def ensure_transcript(
+    media: Path,
+    workflow_video: Path,
+    transcript_dir: Path,
+    language: str,
+    confirm_external_processing: bool,
+) -> None:
     transcript_path = transcript_dir / "transcript_words.json"
     if transcript_path.exists():
         transcript = read_json(transcript_path)
@@ -485,20 +490,21 @@ def ensure_transcript(media: Path, transcript_dir: Path, language: str, confirm_
         print(f"Using existing transcript: {transcript_path}", flush=True)
         return
 
-    run_step(
-        [
-            sys.executable,
-            "scripts/transcribe_api.py",
-            str(media),
-            "--provider",
-            "aliyun-fun-asr",
-            "--out-dir",
-            str(transcript_dir),
-            "--language",
-            language,
-            "--confirm-external-processing",
-        ]
-    )
+    command = [
+        sys.executable,
+        "scripts/transcribe_api.py",
+        str(media),
+        "--provider",
+        "aliyun-fun-asr",
+        "--out-dir",
+        str(transcript_dir),
+        "--language",
+        language,
+        "--confirm-external-processing",
+    ]
+    if media.suffix.lower() in AUDIO_SUFFIXES:
+        command.extend(["--workflow-video", str(workflow_video)])
+    run_step(command)
 
 
 def ensure_work_files(transcript_dir: Path, work_dir: Path) -> None:
@@ -565,14 +571,6 @@ def ensure_prompt(work_dir: Path, domain_name: str, glossary: Path) -> None:
         ]
     )
     write_json(meta_path, desired_meta)
-
-
-def maybe_copy_segments(source: Path | None, destination: Path) -> None:
-    if source is None:
-        return
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, destination)
-    print(f"Copied segments: {source} -> {destination}", flush=True)
 
 
 def record_step_status(work_dir: Path, step: str, status: str, detail: str = "") -> None:
@@ -775,7 +773,7 @@ def write_run_summary(
         source_reference = "inherited from source-analysis"
         reference_corrected_chunks = "recorded in source-analysis"
     else:
-        translation_path = "provided_segments"
+        translation_path = "unknown_legacy"
         effective_translation_model = translation_model or orchestrator_model
         helper_detail = "generation metadata unavailable"
         source_reference = "none"
@@ -1197,7 +1195,7 @@ def main() -> int:
 
     record_step_status(work_dir, "transcription", "running")
     step_started = time.monotonic()
-    ensure_transcript(asr_media, transcript_dir, args.language, args.confirm_external_processing)
+    ensure_transcript(asr_media, media, transcript_dir, args.language, args.confirm_external_processing)
     record_step_timing(work_dir, "transcription", time.monotonic() - step_started, f"ASR language={args.language}")
     record_step_status(work_dir, "transcription", "done")
 
@@ -1225,8 +1223,7 @@ def main() -> int:
 
     record_step_status(work_dir, "ai_segments", "running", f"translation_provider={args.translation_provider}")
     step_started = time.monotonic()
-    maybe_copy_segments(args.segments, work_dir / "segments.txt")
-    if not args.segments and args.translation_provider == "qwen-mt-plus":
+    if args.translation_provider == "qwen-mt-plus":
         ensure_ai_segments(
             work_dir,
             transcript_dir,
@@ -1235,7 +1232,7 @@ def main() -> int:
             source_subtitle,
             work_dir / "global_review" / "source-analysis" / "translation-context.json",
         )
-    elif not args.segments and not agent_translation_gate(work_dir):
+    elif not agent_translation_gate(work_dir):
         record_step_timing(work_dir, "ai_segments", time.monotonic() - step_started, "waiting for Agent-native translation")
         record_step_status(work_dir, "ai_segments", "waiting", "complete Agent translation sections and receipt")
         return 4
@@ -1243,7 +1240,7 @@ def main() -> int:
         work_dir,
         "ai_segments",
         time.monotonic() - step_started,
-        "copied provided segments" if args.segments else f"generated with {args.translation_provider}",
+        f"generated with {args.translation_provider}",
     )
     record_step_status(work_dir, "ai_segments", "done", "segments.txt ready")
 

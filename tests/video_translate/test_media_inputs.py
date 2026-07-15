@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = ROOT / "skills" / "video-translate" / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from transcribe_api import extract_audio, should_delete_prepared_audio  # noqa: E402
+from transcribe_api import extract_audio, should_delete_prepared_audio, validate_workflow_audio  # noqa: E402
 from generate_segments_with_dashscope import build_chunks  # noqa: E402
 from source_subtitle_reference import load_source_subtitle, references_by_asr_segment  # noqa: E402
 from video_to_subtitles import (  # noqa: E402
@@ -59,6 +59,31 @@ class MediaInputTest(unittest.TestCase):
             self.assertEqual(main(), 2)
         finally:
             sys.argv = old_argv
+
+    def test_transcribe_helper_rejects_direct_audio_without_internal_marker(self):
+        from transcribe_api import main as transcribe_main
+
+        audio = self.tmp_dir / "lesson.m4a"
+        audio.write_bytes(b"audio")
+        old_argv = sys.argv
+        try:
+            sys.argv = ["transcribe_api.py", str(audio), "--confirm-external-processing"]
+            self.assertEqual(transcribe_main(), 2)
+        finally:
+            sys.argv = old_argv
+
+    def test_workflow_audio_must_match_video_name_and_project(self):
+        video = self.tmp_dir / "lesson.mp4"
+        video.write_bytes(b"video")
+        hidden = self.tmp_dir / ".work" / "input" / "lesson.m4a"
+        hidden.parent.mkdir(parents=True)
+        hidden.write_bytes(b"audio")
+        self.assertEqual(validate_workflow_audio(hidden, video), hidden.resolve())
+
+        unrelated = self.tmp_dir / ".work" / "input" / "other.m4a"
+        unrelated.write_bytes(b"audio")
+        with self.assertRaisesRegex(RuntimeError, "basename must match"):
+            validate_workflow_audio(unrelated, video)
 
     def test_prefers_same_basename_downloaded_audio(self):
         video = self.tmp_dir / "lesson.mp4"

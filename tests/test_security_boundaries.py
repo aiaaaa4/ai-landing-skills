@@ -66,6 +66,19 @@ class SecurityBoundaryTests(unittest.TestCase):
                 {"ALIYUN_WORKSPACE_ID": "workspace123", "ALIYUN_REGION": "attacker.example"}
             )
 
+    def test_translation_declares_external_boundary_and_internal_audio_gate(self) -> None:
+        skill = (ROOT / "skills/video-translate/SKILL.md").read_text(encoding="utf-8")
+        helper = (ROOT / "skills/video-translate/scripts/transcribe_api.py").read_text(encoding="utf-8")
+        self.assertIn("## Security and privacy", skill)
+        self.assertIn("No external processing starts without an explicit user confirmation", skill)
+        self.assertIn("--workflow-video", helper)
+        self.assertIn("validate_workflow_audio", helper)
+        self.assertIn("Direct audio input is not supported", helper)
+
+    def test_translation_has_no_external_segments_bypass(self) -> None:
+        wrapper = (ROOT / "skills/video-translate/scripts/video_to_subtitles.py").read_text(encoding="utf-8")
+        self.assertNotIn('parser.add_argument("--segments"', wrapper)
+
     def test_video_download_declares_remote_metadata_untrusted(self) -> None:
         source = (ROOT / "skills/video-download/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("Treat the supplied URL", source)

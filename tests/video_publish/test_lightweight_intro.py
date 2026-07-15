@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 import random
+import json
 from fractions import Fraction
 from pathlib import Path
 from unittest.mock import patch
@@ -116,15 +117,29 @@ class LightweightIntroTest(unittest.TestCase):
         args = self.parse("--subtitle", str(subtitle))
         source, _, output, resolved_subtitle, _, subtitle_output = validate_args(args)
         self.assertEqual(resolved_subtitle, subtitle.resolve())
-        self.assertEqual(subtitle_output, (self.root / "output.中英双语字幕.srt").resolve())
+        self.assertEqual(subtitle_output, (self.root / "output.中英双语字幕.bcc").resolve())
 
-        from subtitle_timeline import shift_srt_file
+        from subtitle_timeline import write_bcc_file
 
-        shift_srt_file(resolved_subtitle, subtitle_output, 3.080011111)
-        shifted = subtitle_output.read_text(encoding="utf-8")
-        self.assertIn("00:00:05,030 --> 00:00:06,180", shifted)
-        self.assertIn("中文\nEnglish", shifted)
-        self.assertIn(b"\r\n", subtitle_output.read_bytes())
+        write_bcc_file(resolved_subtitle, subtitle_output, 3.080011111)
+        payload = json.loads(subtitle_output.read_text(encoding="utf-8"))
+        self.assertEqual(payload["body"][0]["from"], 5.03)
+        self.assertEqual(payload["body"][0]["to"], 6.18)
+        self.assertEqual(payload["body"][0]["location"], 2)
+        self.assertEqual(payload["body"][0]["content"], "中文\nEnglish")
+        self.assertEqual(payload["font_size"], 0.4)
+
+    def test_rejects_invalid_bcc_output_extension(self):
+        subtitle = self.root / "source.srt"
+        subtitle.write_text("1\n00:00:00,000 --> 00:00:01,000\nText\n", encoding="utf-8")
+        args = self.parse(
+            "--subtitle",
+            str(subtitle),
+            "--subtitle-output",
+            str(self.root / "release.srt"),
+        )
+        with self.assertRaisesRegex(RuntimeError, "bcc extension"):
+            validate_args(args)
 
     def test_defaults_to_three_second_disclaimer(self):
         self.assertEqual(self.parse().disclaimer_seconds, 3.0)

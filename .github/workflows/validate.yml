@@ -14,4 +14,5 @@ jobs:
         with:
           python-version: "3.11"
       - run: python tools/validate_repo.py
+      - run: python tools/sync_video_flow.py --check
       - run: python -m unittest discover -s tests
