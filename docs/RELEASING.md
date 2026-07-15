@@ -112,7 +112,7 @@ The private `rithmic-signup` repository follows the same backup rule, but it is 
 ### Composite Flow Changes
 
 - A component Skill change is authoritative in `skills/<slug>/`; update the Flow lock with `tools/sync_video_flow.py --write` in the same commit.
-- A Flow-only orchestration change belongs in `flows/video-production/FLOW.md` and `flow.json`; do not patch component Skill code indirectly.
+- A Flow-only orchestration change belongs in `flows/video-flow/FLOW.md` and `flow.json`; do not patch component Skill code indirectly.
 - If the Flow changes its user-facing defaults or handoff contract, increment its `flow.json` version and run the full test suite.
 
 ## Local Boundary

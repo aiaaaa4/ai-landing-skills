@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "flow_id": "aiaaaa4.video-production-flow",
-  "display_name": "视频下载、字幕翻译与发布工作流",
-  "version": "1.0.0",
-  "path": "flows/video-production",
+  "flow_id": "aiaaaa4.video-flow",
+  "display_name": "视频生产工作流",
+  "version": "1.0.1",
+  "path": "flows/video-flow",
   "source_of_truth": "skills/<slug>",
   "dependencies": {
     "aiaaaa4.video-download": {

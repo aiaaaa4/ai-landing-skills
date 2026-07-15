@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FLOW_PATH = ROOT / "flows/video-production/flow.json"
+FLOW_PATH = ROOT / "flows/video-flow/flow.json"
 REQUIRED_SLUGS = ("video-download", "video-translate", "video-publish")
 
 
@@ -37,7 +37,7 @@ def sync(write: bool) -> bool:
         return False
     if not write:
         raise SystemExit(
-            "video Flow dependency lock is stale. Run `python3 tools/sync_video_flow.py --write` "
+            "video-flow dependency lock is stale. Run `python3 tools/sync_video_flow.py --write` "
             "after changing a component Skill version."
         )
     flow["dependencies"] = expected
@@ -53,7 +53,7 @@ def main() -> int:
     if args.write and args.check:
         parser.error("choose only one of --write or --check")
     changed = sync(args.write)
-    print("video Flow dependency lock updated" if changed else "video Flow dependency lock is current")
+    print("video-flow dependency lock updated" if changed else "video-flow dependency lock is current")
     return 0
 
 

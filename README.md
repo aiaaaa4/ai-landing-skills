@@ -64,9 +64,11 @@
 
 正常完成后的可见交付为：原版视频和发布版视频 `2` 个；双语 ASS、双语 SRT、发布版双语 BCC `3` 个；原始封面 `1` 张。开启抽帧封面后会额外生成 `5` 张候选；独立音频和原语言字幕均为 `0`。运行记录与时间线清单保留在隐藏 `.work/`，不污染交付目录。
 
-### [视频下载、字幕翻译与发布 Flow](flows/video-production)
+### [视频生产工作流](flows/video-flow)
 
-组合 Flow 只负责编排，不复制三个 Skill 的代码。它固定按 `video-download → video-translate → video-publish` 顺序运行，共用一个媒体项目目录，并通过 `flows/video-production/flow.json` 锁定三个组件的当前版本。任意组件 Skill 更新后，运行 `python3 tools/sync_video_flow.py --write` 更新 Flow 依赖锁；CI 会阻止 Flow 使用旧版本。
+**`aiaaaa4.video-flow` · v1.0.1 · [查看工作流](flows/video-flow/FLOW.md)**
+
+组合 Flow 只负责编排，不复制三个 Skill 的代码。它固定按 `video-download → video-translate → video-publish` 顺序运行，共用一个媒体项目目录，并通过 `flows/video-flow/flow.json` 锁定三个组件的当前版本。任意组件 Skill 更新后，运行 `python3 tools/sync_video_flow.py --write` 更新 Flow 依赖锁；CI 会阻止 Flow 使用旧版本。
 
 Flow 默认下载最高可用质量、输出简体中文双语 ASS/SRT、添加 3 秒免责声明并生成发布版双语 BCC；抽帧封面、水印、烧录字幕、裁切、滤镜和全片重编码均保持关闭，除非用户明确开启。
 
@@ -143,7 +145,7 @@ skills/
   video-publish/        # B 站 3 秒免责声明、可选抽帧封面与 BCC 字幕流程
   cloud-file-mgmt/      # Mac + AList WebDAV 的多网盘管理流程
 flows/
-  video-production/     # 三个视频 Skill 的依赖锁定组合流程
+  video-flow/           # 视频生产工作流及三个 Skill 的依赖锁
 docs/                   # 面向人的产品与发布说明
 tests/                  # 可重复运行的回归测试
 tools/                  # 校验与独立发布工具

@@ -20,7 +20,10 @@ class VideoFlowTest(unittest.TestCase):
         self.assertIn("current", result.stdout)
 
     def test_flow_has_single_source_of_truth_and_safe_defaults(self):
-        flow = json.loads((ROOT / "flows/video-production/flow.json").read_text(encoding="utf-8"))
+        flow = json.loads((ROOT / "flows/video-flow/flow.json").read_text(encoding="utf-8"))
+        self.assertEqual(flow["flow_id"], "aiaaaa4.video-flow")
+        self.assertEqual(flow["display_name"], "视频生产工作流")
+        self.assertEqual(flow["path"], "flows/video-flow")
         self.assertEqual(flow["source_of_truth"], "skills/<slug>")
         self.assertEqual(flow["defaults"]["publish_covers"], False)
         self.assertEqual(flow["defaults"]["publish_subtitle_format"], "bcc")
@@ -31,7 +34,7 @@ class VideoFlowTest(unittest.TestCase):
         })
 
     def test_flow_defaults_are_mirrored_by_component_contracts(self):
-        flow = json.loads((ROOT / "flows/video-production/flow.json").read_text(encoding="utf-8"))
+        flow = json.loads((ROOT / "flows/video-flow/flow.json").read_text(encoding="utf-8"))
         translate = (ROOT / "skills/video-translate/SKILL.md").read_text(encoding="utf-8")
         publish = (ROOT / "skills/video-publish/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("默认由 `qwen-mt-plus`", translate)
