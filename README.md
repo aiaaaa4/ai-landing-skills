@@ -1,6 +1,6 @@
 <div align="center">
   <h1 align="center">AI落地第四声 · Agent Skills</h1>
-  <p align="center">面向真实任务的 Agent Skills：下载、字幕翻译、视频封装与多网盘文件管理。</p>
+  <p align="center">面向真实任务的视频 Agent Skills：下载、字幕翻译、视频封装与组合工作流。</p>
   <p align="center">
     <a href="#skills">浏览 Skills</a> ·
     <a href="#install">安装</a> ·
@@ -72,17 +72,6 @@
 
 Flow 默认下载最高可用质量、输出简体中文双语 ASS/SRT、添加 3 秒免责声明并生成发布版双语 BCC；抽帧封面、水印、烧录字幕、裁切、滤镜和全片重编码均保持关闭，除非用户明确开启。
 
-### [网盘文件管理](skills/cloud-file-mgmt)
-
-**`aiaaaa4.cloud-file-mgmt` · v1.2.2 · [查看源码](skills/cloud-file-mgmt) · [ClawHub](https://clawhub.ai/aiaaaa4/cloud-file-mgmt)**
-
-把 AList 已配置的多种网盘、对象存储、文件协议与 Mac 本地文件系统放进同一套 Agent 工作流。常见驱动包括阿里云盘、115、123 云盘、百度网盘、夸克、OneDrive、Google Drive、Dropbox、PikPak、迅雷、S3、WebDAV、SMB、FTP/SFTP 等；完整范围以 [AList 官方驱动目录](https://alistgo.com/guide/drivers/) 为准。
-
-- 通过本地 AList WebDAV 管理任意已配置的顶层存储挂载；可启动/停止服务、检查运行状态、在 Finder 挂载或卸载 WebDAV。
-- Agent 可确认本地源路径与目标网盘后流式上传或下载文件；上传文件夹时自动临时打包为 ZIP，并在完成后清理临时文件。重要 Office 文件、视频和大文件优先使用脚本，不依赖 Finder 拖拽。
-- 删除远程文件前必须再次确认，避免批量操作误删；账号密码、Token、数据库、日志和下载文件始终留在本机，不会被提交到 GitHub。
-- 内置 aria2 本地服务运行管理，为后续的直接链接下载和传输任务预留基础。**当前版本不会绕过百度网盘或其他平台的会员、版权、风控与带宽限制**；任何速度提升都取决于文件来源、账户权限与平台规则。
-
 ## Install
 
 ### 从 ClawHub 安装
@@ -91,7 +80,6 @@ Flow 默认下载最高可用质量、输出简体中文双语 ASS/SRT、添加 
 clawhub install @aiaaaa4/video-download
 clawhub install @aiaaaa4/video-translate
 clawhub install @aiaaaa4/video-publish
-clawhub install @aiaaaa4/cloud-file-mgmt
 ```
 
 ### 从 GitHub 直接安装
@@ -108,7 +96,6 @@ npx skills add aiaaaa4/ai-landing-skills --list --full-depth
 npx skills add aiaaaa4/ai-landing-skills --skill video-download --full-depth
 npx skills add aiaaaa4/ai-landing-skills --skill video-translate --full-depth
 npx skills add aiaaaa4/ai-landing-skills --skill video-publish --full-depth
-npx skills add aiaaaa4/ai-landing-skills --skill cloud-file-mgmt --full-depth
 ```
 
 `skills.sh` 直接读取公开 GitHub 仓库；ClawHub 则使用各 Skill 的独立发布版本。详细兼容性与命令请参考 [skills CLI 文档](https://github.com/vercel-labs/skills)。
@@ -143,7 +130,6 @@ skills/
   video-download/       # yt-dlp + FFmpeg 的受确认下载流程
   video-translate/      # 本地视频的高质量字幕翻译流程
   video-publish/        # B 站 3 秒免责声明、可选抽帧封面与 BCC 字幕流程
-  cloud-file-mgmt/      # Mac + AList WebDAV 的多网盘管理流程
 flows/
   video-flow/           # 视频生产工作流及三个 Skill 的依赖锁
 docs/                   # 面向人的产品与发布说明

@@ -13,7 +13,8 @@
 
 | 项目 | 可见性 | 用途 | 可信来源 |
 | --- | --- | --- | --- |
-| `ai-landing-skills` | 公开 | 四个可独立安装和发布的 Agent Skill | `skills/<slug>/` 与 `registry.json` |
+| `ai-landing-skills` | 公开 | 三个可独立安装和发布的视频 Agent Skill，以及组合 Flow | `skills/<slug>/`、`flows/video-flow/` 与 `registry.json` |
+| `cloud-file-mgmt` | 私有、暂停 | 网盘文件管理 Skill 的历史源码与重构基线 | 独立私有 GitHub 仓库 |
 | `rithmic-signup` | 私有 | Rithmic 注册助手 App | 私有 GitHub 仓库 |
 | 本地网盘运行时 | 仅本机 | AList、aria2、数据库、日志与下载文件 | 忽略的本地 `runtime/` 目录 |
 
@@ -26,16 +27,12 @@
 | `aiaaaa4.video-download` | 一键加速视频下载 | `skills/video-download` |
 | `aiaaaa4.video-translate` | 人工级视频字幕翻译 | `skills/video-translate` |
 | `aiaaaa4.video-publish` | 极简视频封装 | `skills/video-publish` |
-| `aiaaaa4.cloud-file-mgmt` | 网盘文件管理 | `skills/cloud-file-mgmt` |
 
 `registry.json` 是 ID、展示名称、路径、版本、ClawHub 包名和主题标签的唯一来源。不要在多个文件里手工维护另一份版本号。
 
 ## 本地运行策略
 
 - 公开 Skill 包只包含可安装的说明、脚本和必要引用资料；绝不提交 `runtime/`、数据库、日志、下载内容、输出文件或凭据。
-- 网盘 Skill 的本机运行时可以存放在忽略的本地项目目录中；它不是公开发布源。公开脚本的修改应先写入 `skills/cloud-file-mgmt/`，本机运行副本需要同步验证。
-- AList Finder WebDAV 的默认挂载点是 `~/AList-WebDAV`，不依赖仓库路径。移动项目后，重新启动服务并重新挂载，不复制或公开运行时数据。
-- Finder 适合浏览和确认后删除。百度网盘可能拒绝 Finder 拖拽时创建的空临时文件；上传、下载 Office 文件、视频或大文件优先由 Agent 调用 `cloud-upload.sh` 与 `cloud-download.sh`。
 - 视频下载后若继续翻译字幕，先在用户指定位置创建 `<中文视频名> [<视频 ID>]` 媒体项目文件夹。项目根目录只放可见交付；直接下载的独立音频和一份原语言字幕放入隐藏 `.work/input/`，不散落在桌面或 Skill 源码目录。
 - 字幕翻译始终通过 OkFile + Fun-ASR 获取词级时间戳。编排模型在初译前先通读完整源文，生成本视频专属 `domains/terms/tm_list`；初译公开默认使用 qwen-mt-plus，用户也可选择当前 Codex / Agent 模型直接翻译。之后编排模型再次通读原文与译文进行重译审校和语义重分段，最终 QC 通过后才导出并清理 `.work/input/`。
 - 视频发布封装只处理用户明确给出的本地视频、字幕和输出路径。每次都确认免责声明、水印、字幕烧录、裁切、编码质量和覆盖行为；发布版字幕优先按音频内容匹配计算实际偏移，时间线清单放在 `.work/publish/`。不访问网络或云端服务，也不安装、卸载或替换 FFmpeg。缺少 FFmpeg 时停止并提示用户自行安装。
@@ -79,4 +76,4 @@
 
 ## 维护入口
 
-以后可直接在总控对话中说明目标，例如“测试视频下载”“优化网盘上传”“发布字幕翻译新版本”或“修改私有 Rithmic App”。执行时先以本文件、`registry.json`、目标 Skill 的 `SKILL.md` 和 Git 当前状态为准。
+以后可直接在总控对话中说明目标，例如“测试视频下载”“重新设计网盘管理”“发布字幕翻译新版本”或“修改私有 Rithmic App”。执行时先以本文件、`registry.json`、目标 Skill 的 `SKILL.md` 和 Git 当前状态为准。`cloud-file-mgmt` 在完成重新设计和端到端验证前不得恢复公开分发。

@@ -1,4 +1,0 @@
-interface:
-  display_name: "网盘文件管理"
-  short_description: "通过本地 AList WebDAV 统一管理多网盘和存储挂载。"
-  default_prompt: "使用 $cloud-file-mgmt 管理本地 AList 中已配置的网盘或存储。先确认顶层挂载名称、源与目标路径、传输方向和是否涉及删除，再运行对应脚本。"

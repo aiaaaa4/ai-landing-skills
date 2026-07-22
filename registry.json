@@ -84,30 +84,6 @@
           "aiaaaa4"
         ]
       }
-    },
-    {
-      "kind": "skill",
-      "slug": "cloud-file-mgmt",
-      "skill_id": "aiaaaa4.cloud-file-mgmt",
-      "display_name": "网盘文件管理",
-      "path": "skills/cloud-file-mgmt",
-      "version": "1.2.2",
-      "platforms": [
-        "github",
-        "clawhub",
-        "skills.sh",
-        "skillhub",
-        "skillsmp"
-      ],
-      "clawhub": {
-        "package": "@aiaaaa4/cloud-file-mgmt",
-        "topics": [
-          "cloud-storage",
-          "alist",
-          "webdav",
-          "aiaaaa4"
-        ]
-      }
     }
   ]
 }

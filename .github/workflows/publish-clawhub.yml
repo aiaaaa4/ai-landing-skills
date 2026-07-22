@@ -11,7 +11,6 @@ on:
           - video-download
           - video-translate
           - video-publish
-          - cloud-file-mgmt
       changelog:
         description: Short public summary of this release
         required: true
