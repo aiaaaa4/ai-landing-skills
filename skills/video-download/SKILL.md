@@ -26,7 +26,7 @@ AI：我会先列出可用格式，然后给你几个选择：最高画质、MP4
 
 ## Exact Preflight
 
-Do not invent, paraphrase, reorder, or add confirmation choices. For a standalone download, run `python scripts/preflight.py --mode single`; for `video-download -> video-translate -> video-publish`, run `python scripts/preflight.py --mode combined`. Send stdout to the user verbatim. The combined questionnaire replaces all downstream Skill questionnaires; reuse those answers and do not ask them again. Omit it only when the user already supplied every answer explicitly.
+Do not invent, paraphrase, reorder, or add confirmation choices. For a standalone download, run `python scripts/preflight.py --mode single`; for `video-download -> video-translate`, run `python scripts/preflight.py --mode combined`. Send stdout to the user verbatim. The combined questionnaire replaces the downstream translation questionnaire; reuse those answers and do not ask them again. Omit it only when the user already supplied every answer explicitly.
 
 ## Long-Running Execution
 

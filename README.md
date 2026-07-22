@@ -1,6 +1,6 @@
 <div align="center">
   <h1 align="center">AI落地第四声 · Agent Skills</h1>
-  <p align="center">面向真实任务的视频 Agent Skills：下载、字幕翻译、视频封装与组合工作流。</p>
+  <p align="center">面向真实任务的视频素材 Skills：视频下载、字幕翻译与组合工作流。</p>
   <p align="center">
     <a href="#skills">浏览 Skills</a> ·
     <a href="#install">安装</a> ·
@@ -31,7 +31,7 @@
 - 支持 YouTube、YouTube Shorts、Vimeo、TikTok、Instagram、X/Twitter、Facebook、Twitch、Bilibili、Dailymotion、SoundCloud、Bandcamp、Reddit 等常见来源，以及 [yt-dlp 官方列出的完整站点清单](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)。yt-dlp 的官方定义是支持数千个站点，因此以该清单为准，而不是维护一份很快过期的静态列表。
 - 下载前由 Agent 检查可用格式，并按最高质量、MP4 兼容、较小体积、仅音频等目标给出可理解的选项。
 - 下载媒体时同时保存平台提供的最高质量作者封面，统一转换并命名为 `原始封面.png`；不会额外下载一组不同尺寸。
-- 进入三 Skill 组合流程时，额外把独立音频和一份最佳原语言字幕（如有）放入隐藏 `.work/input/`，供 Fun-ASR 与内容校正使用，翻译成功后自动清理。
+- 进入素材准备组合流程时，额外把独立音频和一份最佳原语言字幕（如有）放入隐藏 `.work/input/`，供 Fun-ASR 与内容校正使用，翻译成功后自动清理。
 - 可选择分辨率、帧率、HDR/SDR、编码、音轨和输出文件名；默认不把播放列表当作单个视频误下载。
 - 基于 `yt-dlp` 下载，使用 [FFmpeg](https://ffmpeg.org/ffmpeg.html) 完成音视频合并、容器转换、提取音频、嵌入字幕/封面等后处理。FFmpeg 是通用媒体转换工具，能读取、过滤与转码多种音视频格式。
 
@@ -48,29 +48,13 @@
 - 支持重要 PPT、图表、UI、代码或屏幕文字的上下文处理，并为长视频持续反馈进度。
 - [查看完整工作流说明](docs/video-translate/视频翻译工作流说明书.md)。
 
-### [极简视频封装](skills/video-publish)
+### [视频素材准备工作流](flows/video-flow)
 
-**`aiaaaa4.video-publish` · v1.0.9 · [查看源码](skills/video-publish) · [ClawHub](https://clawhub.ai/aiaaaa4/video-publish)**
+**`aiaaaa4.video-flow` · v2.0.0 · [查看工作流](flows/video-flow/FLOW.md)**
 
-为已经下载或翻译完成的本地视频快速生成 B 站发布素材。它在视频开头轻量添加 3 秒固定免责声明，并优先通过音频内容匹配，把双语 SRT 转为时间轴准确的发布版双语 BCC；默认不重新编码视频主体。
+组合 Flow 只负责编排，不复制两个 Skill 的代码。它固定按 `video-download → video-translate` 顺序运行，共用一个媒体项目目录，并通过 `flows/video-flow/flow.json` 锁定两个组件的当前版本。任意组件 Skill 更新后，运行 `python3 tools/sync_video_flow.py --write` 更新 Flow 依赖锁；CI 会阻止 Flow 使用旧版本。
 
-- 抽取 `抽帧封面1.png` 至 `抽帧封面5.png` 默认关闭；字幕烧录、水印和其他完整重编码功能保留为高级模式。
-- 支持开篇全屏黑底或半透明免责声明、动态漂移/四角水印、裁切片段、速度或画质优先、网页快速起播。
-- 缺少 FFmpeg 时会停止并提示用户自行安装可信版本；Skill 不调用 Homebrew、`sudo` 或其他包管理器。
-
-### 三 Skill 组合工作流
-
-`video-download → video-translate → video-publish` 共用一个媒体项目目录。下载阶段把独立音频和原语言字幕放进隐藏输入区；翻译阶段始终用 Fun-ASR 取得词级时间戳，并用原字幕校正内容，成功后删除临时音频和原字幕；发布阶段增加免责声明，并按实际语音偏移把双语 SRT 转为发布版双语 BCC。抽帧封面默认关闭，可按需开启。
-
-正常完成后的可见交付为：原版视频和发布版视频 `2` 个；双语 ASS、双语 SRT、发布版双语 BCC `3` 个；原始封面 `1` 张。开启抽帧封面后会额外生成 `5` 张候选；独立音频和原语言字幕均为 `0`。运行记录与时间线清单保留在隐藏 `.work/`，不污染交付目录。
-
-### [视频生产工作流](flows/video-flow)
-
-**`aiaaaa4.video-flow` · v1.0.1 · [查看工作流](flows/video-flow/FLOW.md)**
-
-组合 Flow 只负责编排，不复制三个 Skill 的代码。它固定按 `video-download → video-translate → video-publish` 顺序运行，共用一个媒体项目目录，并通过 `flows/video-flow/flow.json` 锁定三个组件的当前版本。任意组件 Skill 更新后，运行 `python3 tools/sync_video_flow.py --write` 更新 Flow 依赖锁；CI 会阻止 Flow 使用旧版本。
-
-Flow 默认下载最高可用质量、输出简体中文双语 ASS/SRT、添加 3 秒免责声明并生成发布版双语 BCC；抽帧封面、水印、烧录字幕、裁切、滤镜和全片重编码均保持关闭，除非用户明确开启。
+Flow 默认下载最高可用质量和原始封面，并输出简体中文双语 ASS/SRT。它只交付可继续加工的素材工程，不执行平台发布封装。
 
 ## Install
 
@@ -79,7 +63,6 @@ Flow 默认下载最高可用质量、输出简体中文双语 ASS/SRT、添加 
 ```bash
 clawhub install @aiaaaa4/video-download
 clawhub install @aiaaaa4/video-translate
-clawhub install @aiaaaa4/video-publish
 ```
 
 ### 从 GitHub 直接安装
@@ -95,7 +78,6 @@ npx skills add aiaaaa4/ai-landing-skills --list --full-depth
 ```bash
 npx skills add aiaaaa4/ai-landing-skills --skill video-download --full-depth
 npx skills add aiaaaa4/ai-landing-skills --skill video-translate --full-depth
-npx skills add aiaaaa4/ai-landing-skills --skill video-publish --full-depth
 ```
 
 `skills.sh` 直接读取公开 GitHub 仓库；ClawHub 则使用各 Skill 的独立发布版本。详细兼容性与命令请参考 [skills CLI 文档](https://github.com/vercel-labs/skills)。
@@ -129,9 +111,8 @@ skills.sh 异步刷新 / SkillHub 手动维护或等待镜像
 skills/
   video-download/       # yt-dlp + FFmpeg 的受确认下载流程
   video-translate/      # 本地视频的高质量字幕翻译流程
-  video-publish/        # B 站 3 秒免责声明、可选抽帧封面与 BCC 字幕流程
 flows/
-  video-flow/           # 视频生产工作流及三个 Skill 的依赖锁
+  video-flow/           # 视频素材准备工作流及两个公开 Skill 的依赖锁
 docs/                   # 面向人的产品与发布说明
 tests/                  # 可重复运行的回归测试
 tools/                  # 校验与独立发布工具

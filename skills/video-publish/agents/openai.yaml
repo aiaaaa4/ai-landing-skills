@@ -1,6 +1,0 @@
-interface:
-  display_name: "极简视频封装"
-  short_description: "轻量添加免责声明，并把双语 SRT 校准为 B 站发布版 BCC。"
-  default_prompt: "使用 $video-publish 时原样发送 scripts/preflight.py 的固定问卷；组合流程复用已确认答案。默认添加 3 秒免责声明并把双语 SRT 校准为发布版双语 BCC；抽帧封面默认关闭。长任务保持前台或轮询同一 session，禁止结束轮次等待通知。"
-policy:
-  allow_implicit_invocation: false

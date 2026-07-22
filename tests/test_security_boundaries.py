@@ -19,18 +19,6 @@ def load_module(name: str, path: Path):
 
 
 class SecurityBoundaryTests(unittest.TestCase):
-    def test_video_publish_environment_check_cannot_modify_packages(self) -> None:
-        source = (ROOT / "skills/video-publish/scripts/check_ffmpeg.py").read_text(encoding="utf-8")
-        for forbidden in ("subprocess", "Homebrew", "brew", "--install", "uninstall", "install_ffmpeg"):
-            self.assertNotIn(forbidden, source)
-
-    def test_video_publish_has_no_dynamic_imports(self) -> None:
-        skill = ROOT / "skills/video-publish"
-        python_source = "\n".join(path.read_text(encoding="utf-8") for path in skill.rglob("*.py"))
-        self.assertNotIn("__import__(", python_source)
-        self.assertNotIn("eval(", python_source)
-        self.assertNotIn("exec(", python_source)
-
     def test_translation_prompt_escapes_untrusted_delimiters(self) -> None:
         module = load_module(
             "video_translate_generate_prompt",

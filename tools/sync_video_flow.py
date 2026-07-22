@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOW_PATH = ROOT / "flows/video-flow/flow.json"
-REQUIRED_SLUGS = ("video-download", "video-translate", "video-publish")
+REQUIRED_SLUGS = ("video-download", "video-translate")
 
 
 def load_json(path: Path) -> dict:

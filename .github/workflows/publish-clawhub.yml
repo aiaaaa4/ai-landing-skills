@@ -10,7 +10,6 @@ on:
         options:
           - video-download
           - video-translate
-          - video-publish
       changelog:
         description: Short public summary of this release
         required: true

@@ -13,7 +13,8 @@
 
 | 项目 | 可见性 | 用途 | 可信来源 |
 | --- | --- | --- | --- |
-| `ai-landing-skills` | 公开 | 三个可独立安装和发布的视频 Agent Skill，以及组合 Flow | `skills/<slug>/`、`flows/video-flow/` 与 `registry.json` |
+| `ai-landing-skills` | 公开 | 两个可独立安装的视频素材 Skill，以及公开素材准备 Flow | `skills/<slug>/`、`flows/video-flow/` 与 `registry.json` |
+| `aaron-video-workflow` | 私有 | Aaron 的视频发布 Skill、个人配置与私人总 Flow | 独立私有 GitHub 仓库 |
 | `cloud-file-mgmt` | 私有、暂停 | 网盘文件管理 Skill 的历史源码与重构基线 | 独立私有 GitHub 仓库 |
 | `rithmic-signup` | 私有 | Rithmic 注册助手 App | 私有 GitHub 仓库 |
 | 本地网盘运行时 | 仅本机 | AList、aria2、数据库、日志与下载文件 | 忽略的本地 `runtime/` 目录 |
@@ -26,7 +27,6 @@
 | --- | --- | --- |
 | `aiaaaa4.video-download` | 一键加速视频下载 | `skills/video-download` |
 | `aiaaaa4.video-translate` | 人工级视频字幕翻译 | `skills/video-translate` |
-| `aiaaaa4.video-publish` | 极简视频封装 | `skills/video-publish` |
 
 `registry.json` 是 ID、展示名称、路径、版本、ClawHub 包名和主题标签的唯一来源。不要在多个文件里手工维护另一份版本号。
 
@@ -35,7 +35,7 @@
 - 公开 Skill 包只包含可安装的说明、脚本和必要引用资料；绝不提交 `runtime/`、数据库、日志、下载内容、输出文件或凭据。
 - 视频下载后若继续翻译字幕，先在用户指定位置创建 `<中文视频名> [<视频 ID>]` 媒体项目文件夹。项目根目录只放可见交付；直接下载的独立音频和一份原语言字幕放入隐藏 `.work/input/`，不散落在桌面或 Skill 源码目录。
 - 字幕翻译始终通过 OkFile + Fun-ASR 获取词级时间戳。编排模型在初译前先通读完整源文，生成本视频专属 `domains/terms/tm_list`；初译公开默认使用 qwen-mt-plus，用户也可选择当前 Codex / Agent 模型直接翻译。之后编排模型再次通读原文与译文进行重译审校和语义重分段，最终 QC 通过后才导出并清理 `.work/input/`。
-- 视频发布封装只处理用户明确给出的本地视频、字幕和输出路径。每次都确认免责声明、水印、字幕烧录、裁切、编码质量和覆盖行为；发布版字幕优先按音频内容匹配计算实际偏移，时间线清单放在 `.work/publish/`。不访问网络或云端服务，也不安装、卸载或替换 FFmpeg。缺少 FFmpeg 时停止并提示用户自行安装。
+- 私人 `video-publish` 与 `aaron-video-flow` 只在 `aiaaaa4/aaron-video-workflow` 中维护，不进入公开注册表或公共 Skill 平台。公开素材 Flow 的交付边界固定为原版视频、原始封面和双语 ASS/SRT。
 
 ## 版本规则
 

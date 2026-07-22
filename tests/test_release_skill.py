@@ -20,7 +20,7 @@ class ReleaseSkillTests(unittest.TestCase):
 
     def test_registry_exposes_all_public_skills(self) -> None:
         slugs = {item["slug"] for item in self.registry["items"]}
-        self.assertEqual(slugs, {"video-download", "video-translate", "video-publish"})
+        self.assertEqual(slugs, {"video-download", "video-translate"})
         expected_platforms = {"github", "clawhub", "skills.sh", "skillhub", "skillsmp"}
         for item in self.registry["items"]:
             self.assertEqual(set(item["platforms"]), expected_platforms)

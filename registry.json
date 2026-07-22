@@ -59,31 +59,6 @@
           "aiaaaa4"
         ]
       }
-    },
-    {
-      "kind": "skill",
-      "slug": "video-publish",
-      "skill_id": "aiaaaa4.video-publish",
-      "display_name": "极简视频封装",
-      "path": "skills/video-publish",
-      "version": "1.0.9",
-      "platforms": [
-        "github",
-        "clawhub",
-        "skills.sh",
-        "skillhub",
-        "skillsmp"
-      ],
-      "clawhub": {
-        "package": "@aiaaaa4/video-publish",
-        "topics": [
-          "video",
-          "ffmpeg",
-          "cover",
-          "disclaimer",
-          "aiaaaa4"
-        ]
-      }
     }
   ]
 }

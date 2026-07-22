@@ -1,4 +1,4 @@
 interface:
   display_name: "一键加速视频下载"
   short_description: "下载最高画质视频与原始封面，并为翻译流程准备隐藏音频和原字幕。"
-  default_prompt: "使用 $video-download 时先原样发送 scripts/preflight.py 的固定问卷；三 Skill 组合流程使用 --mode combined 并一次收集全部答案。下载及后续任务必须保持前台或持续轮询同一 session，禁止结束轮次等待通知。"
+  default_prompt: "使用 $video-download 时先原样发送 scripts/preflight.py 的固定问卷；与 video-translate 组合时使用 --mode combined 并一次收集素材准备所需答案。下载及后续任务必须保持前台或持续轮询同一 session，禁止结束轮次等待通知。"
